@@ -25,6 +25,7 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/shell/shell_string_conv.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/toolchain.h>
 #include <zephyr/types.h>
 
 #include "common/bt_shell_private.h"
@@ -35,6 +36,9 @@ static void cap_discover_cb(struct bt_conn *conn, int err,
 			    const struct bt_csip_set_coordinator_set_member *member,
 			    const struct bt_csip_set_coordinator_csis_inst *csis_inst)
 {
+	ARG_UNUSED(conn);
+	ARG_UNUSED(member);
+
 	if (err != 0) {
 		bt_shell_error("discover failed (%d)", err);
 		return;
@@ -46,6 +50,8 @@ static void cap_discover_cb(struct bt_conn *conn, int err,
 #if defined(CONFIG_BT_VCP_VOL_CTLR)
 static void cap_volume_changed_cb(struct bt_conn *conn, int err)
 {
+	ARG_UNUSED(conn);
+
 	if (err != 0) {
 		bt_shell_error("Volume change failed (%d)", err);
 		return;
@@ -56,6 +62,8 @@ static void cap_volume_changed_cb(struct bt_conn *conn, int err)
 
 static void cap_volume_mute_changed_cb(struct bt_conn *conn, int err)
 {
+	ARG_UNUSED(conn);
+
 	if (err != 0) {
 		bt_shell_error("Volume mute change failed (%d)", err);
 		return;
@@ -66,6 +74,8 @@ static void cap_volume_mute_changed_cb(struct bt_conn *conn, int err)
 #if defined(CONFIG_BT_VCP_VOL_CTLR_VOCS)
 static void cap_volume_offset_changed_cb(struct bt_conn *conn, int err)
 {
+	ARG_UNUSED(conn);
+
 	if (err != 0) {
 		bt_shell_error("Volume offset change failed (%d)", err);
 		return;
@@ -79,6 +89,8 @@ static void cap_volume_offset_changed_cb(struct bt_conn *conn, int err)
 #if defined(CONFIG_BT_MICP_MIC_CTLR)
 static void cap_microphone_mute_changed_cb(struct bt_conn *conn, int err)
 {
+	ARG_UNUSED(conn);
+
 	if (err != 0) {
 		bt_shell_error("Microphone mute change failed (%d)", err);
 		return;
@@ -90,6 +102,8 @@ static void cap_microphone_mute_changed_cb(struct bt_conn *conn, int err)
 #if defined(CONFIG_BT_MICP_MIC_CTLR_AICS)
 static void cap_microphone_gain_changed_cb(struct bt_conn *conn, int err)
 {
+	ARG_UNUSED(conn);
+
 	if (err != 0) {
 		bt_shell_error("Microphone gain change failed (%d)", err);
 		return;
@@ -103,6 +117,8 @@ static void cap_microphone_gain_changed_cb(struct bt_conn *conn, int err)
 #if defined(CONFIG_BT_BAP_BROADCAST_ASSISTANT)
 static void cap_broadcast_reception_start_cb(struct bt_conn *conn, int err)
 {
+	ARG_UNUSED(conn);
+
 	if (err != 0) {
 		bt_shell_error("Broadcast reception start failed (%d)", err);
 		return;
@@ -160,6 +176,9 @@ static int cmd_cap_commander_cancel(const struct shell *sh, size_t argc, char *a
 {
 	int err;
 
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
 	err = bt_cap_commander_cancel();
 	if (err != 0) {
 		shell_print(sh, "Failed to cancel CAP commander procedure: %d", err);
@@ -174,13 +193,21 @@ static int cmd_cap_commander_discover(const struct shell *sh, size_t argc, char 
 	static bool cbs_registered;
 	int err;
 
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
 	if (default_conn == NULL) {
 		shell_error(sh, "Not connected");
 		return -ENOEXEC;
 	}
 
 	if (!cbs_registered) {
-		bt_cap_commander_register_cb(&cbs);
+		err = bt_cap_commander_register_cb(&cbs);
+		if (err != 0) {
+			shell_error(sh, "Failed to register CAP commander callbacks: %d", err);
+			return -ENOEXEC;
+		}
+
 		cbs_registered = true;
 	}
 
@@ -217,6 +244,8 @@ static int cmd_cap_commander_change_volume(const struct shell *sh, size_t argc, 
 	unsigned long volume;
 	int err = 0;
 
+	ARG_UNUSED(argc);
+
 	if (default_conn == NULL) {
 		shell_error(sh, "Not connected");
 		return -ENOEXEC;
@@ -244,7 +273,7 @@ static int cmd_cap_commander_change_volume(const struct shell *sh, size_t argc, 
 
 	param.count = 0U;
 	param.members = members;
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -277,6 +306,8 @@ static int cmd_cap_commander_change_volume_mute(const struct shell *sh, size_t a
 	};
 	int err = 0;
 
+	ARG_UNUSED(argc);
+
 	if (default_conn == NULL) {
 		shell_error(sh, "Not connected");
 		return -ENOEXEC;
@@ -294,7 +325,7 @@ static int cmd_cap_commander_change_volume_mute(const struct shell *sh, size_t a
 
 	param.count = 0U;
 	param.members = members;
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -337,7 +368,7 @@ static int cmd_cap_commander_change_volume_offset(const struct shell *sh, size_t
 
 	/* Populate the array of connected connections */
 	bt_conn_foreach(BT_CONN_TYPE_LE, populate_connected_conns, (void *)connected_conns);
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -403,6 +434,8 @@ static int cmd_cap_commander_change_microphone_mute(const struct shell *sh, size
 	};
 	int err = 0;
 
+	ARG_UNUSED(argc);
+
 	if (default_conn == NULL) {
 		shell_error(sh, "Not connected");
 		return -ENOEXEC;
@@ -420,7 +453,7 @@ static int cmd_cap_commander_change_microphone_mute(const struct shell *sh, size
 
 	param.count = 0U;
 	param.members = members;
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -466,7 +499,7 @@ static int cmd_cap_commander_change_microphone_gain(const struct shell *sh, size
 
 	/* Populate the array of connected connections */
 	bt_conn_foreach(BT_CONN_TYPE_LE, populate_connected_conns, (void *)connected_conns);
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -556,7 +589,7 @@ static int cmd_cap_commander_broadcast_reception_start(const struct shell *sh, s
 
 	/* Populate the array of connected connections */
 	bt_conn_foreach(BT_CONN_TYPE_LE, populate_connected_conns, (void *)connected_conns);
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -664,7 +697,7 @@ static int cmd_cap_commander_broadcast_reception_start(const struct shell *sh, s
 		subgroup.metadata_len = metadata_len;
 	}
 
-	member_param->num_subgroups = 1;
+	member_param->num_subgroups = 1U;
 	memcpy(member_param->subgroups, &subgroup, sizeof(struct bt_bap_bass_subgroup));
 
 	member_param->member.member = connected_conns[0];
@@ -724,7 +757,7 @@ static int cmd_cap_commander_broadcast_reception_stop(const struct shell *sh, si
 
 	/* Populate the array of connected connections */
 	bt_conn_foreach(BT_CONN_TYPE_LE, populate_connected_conns, (void *)connected_conns);
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -758,7 +791,7 @@ static int cmd_cap_commander_broadcast_reception_stop(const struct shell *sh, si
 		}
 
 		/* TODO: Allow for multiple subgroups */
-		cap_commander_reception_stop_member_params[i].num_subgroups = 1;
+		cap_commander_reception_stop_member_params[i].num_subgroups = 1U;
 		cap_commander_reception_stop_member_params[i].src_id = src_id;
 		cap_commander_reception_stop_member_params[i].member.member = connected_conns[i];
 		cap_commander_reception_stop_param.count++;
@@ -804,7 +837,7 @@ static int cmd_cap_commander_distribute_broadcast_code(const struct shell *sh, s
 
 	/* Populate the array of connected connections */
 	bt_conn_foreach(BT_CONN_TYPE_LE, populate_connected_conns, (void *)connected_conns);
-	for (size_t i = 0; i < ARRAY_SIZE(connected_conns); i++) {
+	for (size_t i = 0U; i < ARRAY_SIZE(connected_conns); i++) {
 		struct bt_conn *conn = connected_conns[i];
 
 		if (conn == NULL) {
@@ -828,7 +861,7 @@ static int cmd_cap_commander_distribute_broadcast_code(const struct shell *sh, s
 		return -ENOEXEC;
 	}
 
-	for (size_t i = 0; i < conn_cnt; i++) {
+	for (size_t i = 0U; i < conn_cnt; i++) {
 		const char *arg = argv[i + 1];
 		unsigned long src_id;
 

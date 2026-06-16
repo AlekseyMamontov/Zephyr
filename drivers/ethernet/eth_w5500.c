@@ -286,7 +286,6 @@ static void w5500_update_link_status(const struct device *dev)
 
 	if (IS_BIT_SET(phycfgr, W5500_PHYCFGR_LNK_BIT)) {
 		if (ctx->state.is_up != true) {
-			LOG_INF("%s: Link up", dev->name);
 			ctx->state.is_up = true;
 			net_eth_carrier_on(ctx->iface);
 		}
@@ -310,7 +309,6 @@ static void w5500_update_link_status(const struct device *dev)
 	}
 
 	if (ctx->state.is_up) {
-		LOG_INF("%s: Link down", dev->name);
 		ctx->state.is_up = false;
 		ctx->state.speed = 0;
 		net_eth_carrier_off(ctx->iface);
@@ -443,10 +441,9 @@ static void w5500_iface_init(struct net_if *iface)
 	k_thread_name_set(&ctx->thread, "eth_w5500");
 }
 
-static enum ethernet_hw_caps w5500_get_capabilities(const struct device *dev)
+static enum ethernet_hw_caps w5500_get_capabilities(const struct device *dev __unused,
+						    struct net_if *iface __unused)
 {
-	ARG_UNUSED(dev);
-
 	return ETHERNET_LINK_10BASE | ETHERNET_LINK_100BASE
 #if defined(CONFIG_NET_PROMISCUOUS_MODE)
 		| ETHERNET_PROMISC_MODE
@@ -455,6 +452,7 @@ static enum ethernet_hw_caps w5500_get_capabilities(const struct device *dev)
 }
 
 static int w5500_set_config(const struct device *dev,
+			    struct net_if *iface __unused,
 			    enum ethernet_config_type type,
 			    const struct ethernet_config *config)
 {
@@ -505,7 +503,7 @@ static int w5500_set_config(const struct device *dev,
 	}
 }
 
-static int w5500_hw_start(const struct device *dev)
+static int w5500_hw_start(const struct device *dev, struct net_if *iface __unused)
 {
 	uint8_t mask = IR_S0;
 
@@ -517,7 +515,7 @@ static int w5500_hw_start(const struct device *dev)
 	return 0;
 }
 
-static int w5500_hw_stop(const struct device *dev)
+static int w5500_hw_stop(const struct device *dev, struct net_if *iface __unused)
 {
 	uint8_t mask = 0;
 
@@ -528,7 +526,7 @@ static int w5500_hw_stop(const struct device *dev)
 	return 0;
 }
 
-static const struct device *w5500_get_phy(const struct device *dev)
+static const struct device *w5500_get_phy(const struct device *dev, struct net_if *iface __unused)
 {
 	const struct w5500_config *config = dev->config;
 

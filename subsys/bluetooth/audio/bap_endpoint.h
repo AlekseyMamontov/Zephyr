@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include <zephyr/autoconf.h>
+#include <zephyr/bluetooth/audio/ascs.h>
 #include <zephyr/bluetooth/audio/audio.h>
 #include <zephyr/bluetooth/audio/bap.h>
 #include <zephyr/bluetooth/bluetooth.h>
@@ -27,19 +28,18 @@
 #define UNICAST_GROUP_CNT	 CONFIG_BT_BAP_UNICAST_CLIENT_GROUP_COUNT
 #define UNICAST_GROUP_STREAM_CNT CONFIG_BT_BAP_UNICAST_CLIENT_GROUP_STREAM_COUNT
 #else /* !CONFIG_BT_BAP_UNICAST_CLIENT */
-#define UNICAST_GROUP_CNT 0
-#define UNICAST_GROUP_STREAM_CNT 0
+#define UNICAST_GROUP_CNT 0U
+#define UNICAST_GROUP_STREAM_CNT 0U
 #endif /* CONFIG_BT_BAP_UNICAST_CLIENT */
 #if defined(CONFIG_BT_BAP_BROADCAST_SOURCE)
 #define BROADCAST_STREAM_CNT CONFIG_BT_BAP_BROADCAST_SRC_STREAM_COUNT
 #else /* !CONFIG_BT_BAP_BROADCAST_SOURCE */
-#define BROADCAST_STREAM_CNT 0
+#define BROADCAST_STREAM_CNT 0U
 #endif /* CONFIG_BT_BAP_BROADCAST_SOURCE */
 
 /* Temp struct declarations to handle circular dependencies */
 struct bt_bap_unicast_group;
 struct bt_bap_broadcast_source;
-struct bt_bap_broadcast_sink;
 
 struct bt_bap_ep {
 	uint8_t dir;
@@ -62,7 +62,6 @@ struct bt_bap_ep {
 	/* TODO: Create a union to reduce memory usage */
 	struct bt_bap_unicast_group *unicast_group;
 	struct bt_bap_broadcast_source *broadcast_source;
-	struct bt_bap_broadcast_sink *broadcast_sink;
 };
 
 struct bt_bap_unicast_group_cig_param {

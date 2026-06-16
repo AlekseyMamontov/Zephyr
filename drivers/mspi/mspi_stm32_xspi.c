@@ -1252,7 +1252,7 @@ static int mspi_stm32_xspi_config(const struct mspi_dt_spec *spec)
 		return ret;
 	}
 
-	dev_data->hmspi.xspi.Instance = (XSPI_TypeDef *)dev_data->phys_addr;
+	dev_data->hmspi.xspi.Instance = dev_cfg->base;
 	(void)pm_device_runtime_get(spec->bus);
 	/* Prevent the clocks to be stopped during the request */
 	pm_policy_state_lock_get(PM_STATE_SUSPEND_TO_IDLE, PM_ALL_SUBSTATES);
@@ -1472,6 +1472,7 @@ static int mspi_stm32_xspi_pm_action(const struct device *dev, enum pm_device_ac
 	STM32_SMPI_IRQ_HANDLER(index)                                                             \
 	                                                                                          \
 	static const struct mspi_stm32_conf mspi_stm32_dev_conf_##index = {                       \
+		.base = (void *)DT_INST_REG_ADDR(index),					  \
 		.pclken = pclken_##index,                                                         \
 		.pclk_len = DT_INST_NUM_CLOCKS(index),                                            \
 		.irq_config = mspi_stm32_irq_config_func_##index,                                 \
@@ -1481,7 +1482,6 @@ static int mspi_stm32_xspi_pm_action(const struct device *dev, enum pm_device_ac
 		.dma_specified = DT_INST_NODE_HAS_PROP(index, dmas),                              \
 	};                                                                                        \
 	static struct mspi_stm32_data mspi_stm32_dev_data_##index = {                             \
-		.phys_addr = DT_INST_REG_ADDR(index),                                             \
 		.hmspi.xspi = {                                                                   \
 			.Init = {                                                                 \
 				.FifoThresholdByte = MSPI_STM32_FIFO_THRESHOLD,                   \
@@ -1498,7 +1498,6 @@ static int mspi_stm32_xspi_pm_action(const struct device *dev, enum pm_device_ac
 			},                                                                        \
 		},                                                                                \
 		.memmap_base_addr = DT_INST_REG_ADDR_BY_IDX(index, 1),                            \
-		.dev_id = index,                                                                  \
 		.lock = Z_MUTEX_INITIALIZER(mspi_stm32_dev_data_##index.lock),                    \
 		.sync = Z_SEM_INITIALIZER(mspi_stm32_dev_data_##index.sync, 0, 1),                \
 		.dev_cfg = {0},                                                                   \

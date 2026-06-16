@@ -57,6 +57,8 @@ uint8_t tmap_char_read(struct bt_conn *conn, uint8_t err,
 {
 	uint16_t peer_role;
 
+	ARG_UNUSED(params);
+
 	/* Check read request result */
 	if (err != BT_ATT_ERR_SUCCESS) {
 		if (cb->discovery_complete) {
@@ -169,7 +171,7 @@ static struct bt_gatt_service tmas;
 
 static bool valid_tmap_role(enum bt_tmap_role role)
 {
-	if (role == 0 || (role & TMAP_ALL_ROLES) != role) {
+	if (role == 0U || (role & TMAP_ALL_ROLES) != role) {
 		LOG_DBG("Invalid role %d", role);
 	}
 

@@ -22,6 +22,7 @@
 #include <zephyr/sys/slist.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
+#include <zephyr/toolchain.h>
 
 LOG_MODULE_REGISTER(bt_ccp_call_control_client, CONFIG_BT_CCP_CALL_CONTROL_CLIENT_LOG_LEVEL);
 
@@ -90,6 +91,8 @@ static void connected_cb(struct bt_conn *conn, uint8_t err)
 {
 	static bool cbs_registered;
 
+	ARG_UNUSED(conn);
+
 	/* We register the callbacks in the connected callback. That way we ensure that they are
 	 * registered before any procedures are completed or we receive any notifications, while
 	 * registering them as late as possible
@@ -108,10 +111,11 @@ static void disconnected_cb(struct bt_conn *conn, uint8_t reason)
 {
 	struct bt_ccp_call_control_client *client = get_client_by_conn(conn);
 
+	ARG_UNUSED(reason);
+
 	/* client->conn may be NULL */
 	if (client->conn == conn) {
-		bt_conn_unref(client->conn);
-		client->conn = NULL;
+		bt_conn_drop(&client->conn);
 
 		memset(client->bearers, 0, sizeof(client->bearers));
 	}
@@ -125,11 +129,12 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 static void populate_bearers(struct bt_ccp_call_control_client *client,
 			     struct bt_ccp_call_control_client_bearers *bearers)
 {
-	size_t i = 0;
+	size_t i = 0U;
 
 #if defined(CONFIG_BT_TBS_CLIENT_GTBS)
 	if (client->bearers[i].discovered) {
-		bearers->gtbs_bearer = &client->bearers[i++];
+		bearers->gtbs_bearer = &client->bearers[i];
+		i++;
 	}
 #endif /* CONFIG_BT_TBS_CLIENT_GTBS */
 
@@ -139,7 +144,8 @@ static void populate_bearers(struct bt_ccp_call_control_client *client,
 			break;
 		}
 
-		bearers->tbs_bearers[bearers->tbs_count++] = &client->bearers[i];
+		bearers->tbs_bearers[bearers->tbs_count] = &client->bearers[i];
+		bearers->tbs_count++;
 	}
 #endif /* CONFIG_BT_TBS_CLIENT_TBS */
 }

@@ -52,7 +52,15 @@ extern struct k_spinlock _sched_spinlock;
 
 extern struct k_thread _thread_dummy;
 
+/**
+ * @brief Unpend thread, do not abort its timeout (if it exists).
+ */
 void z_unpend_thread_no_timeout(struct k_thread *thread);
+
+/**
+ * @brief Unpend thread and abort its timeout (if it exists).
+ */
+void z_unpend_thread(struct k_thread *thread);
 struct k_thread *z_unpend1_no_timeout(_wait_q_t *wait_q);
 int z_pend_curr(struct k_spinlock *lock, k_spinlock_key_t key,
 	       _wait_q_t *wait_q, k_timeout_t timeout);
@@ -60,7 +68,6 @@ void z_pend_thread(struct k_thread *thread, _wait_q_t *wait_q,
 		   k_timeout_t timeout);
 void z_reschedule(struct k_spinlock *lock, k_spinlock_key_t key);
 void z_reschedule_irqlock(uint32_t key);
-void z_unpend_thread(struct k_thread *thread);
 int z_unpend_all(_wait_q_t *wait_q);
 bool z_thread_prio_set(struct k_thread *thread, int prio);
 void *z_get_next_switch_handle(void *interrupted);
@@ -231,26 +238,35 @@ static inline void unpend_thread_no_timeout(struct k_thread *thread)
 }
 
 /*
- * In a multiprocessor system, z_unpend_first_thread() must lock the scheduler
- * spinlock _sched_spinlock. However, in a uniprocessor system, that is not
- * necessary as the caller has already taken precautions (in the form of
- * locking interrupts).
+ * Pick the best-priority waiter from @p wait_q, unpend it, and abort any
+ * timeout it had pending. Returns the thread, or NULL if the wait_q was
+ * empty.
+ *
+ * Caller MUST hold _sched_spinlock and MUST complete the wake (set return
+ * value, ready the thread) under the same lock acquisition before releasing
+ * it. Otherwise a racing in-flight timeout handler can ready the thread
+ * before the caller's wake state is in place, exposing the woken thread
+ * to a stale swap_retval. The pre-1b8c7a3 dticks-cancel check used to
+ * close this window; doing all the wake work atomically under the sched
+ * lock is now the way.
+ *
+ * z_sched_wake() is the convenient wrapper for the common case of
+ * "wake one waiter with this retval and this swap_data".
  */
-static ALWAYS_INLINE struct k_thread *z_unpend_first_thread(_wait_q_t *wait_q)
+static ALWAYS_INLINE struct k_thread *z_unpend_first_thread_locked(_wait_q_t *wait_q)
 {
-	struct k_thread *thread = NULL;
+	struct k_thread *thread = _priq_wait_best(&wait_q->waitq);
 
-	__ASSERT_EVAL(, int key = arch_irq_lock(); arch_irq_unlock(key),
-		      !arch_irq_unlocked(key), "");
-
-	LOCK_SCHED_SPINLOCK {
-		thread = _priq_wait_best(&wait_q->waitq);
-		if (unlikely(thread != NULL)) {
-			unpend_thread_no_timeout(thread);
-			z_abort_thread_timeout(thread);
-		}
+	if (unlikely(thread != NULL)) {
+		unpend_thread_no_timeout(thread);
+		/* Abort the thread's timeout. If its handler is in flight on
+		 * another CPU it is blocked on the sched lock; the abort flags
+		 * it superseded, and z_thread_timeout() bails on that flag when
+		 * it finally runs -- so it won't wake the thread from whatever
+		 * it has since re-pended on. We don't wait for it here.
+		 */
+		(void)z_try_abort_thread_timeout(thread);
 	}
-
 	return thread;
 }
 

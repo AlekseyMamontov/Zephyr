@@ -95,16 +95,15 @@
 			status = "disabled";
 		};
 
-		/* The pll scheme is similar to stm32u5 */
 		pll1: pll: pll {
 			#clock-cells = <0>;
-			compatible = "st,stm32u5-pll-clock";
+			compatible = "st,stm32h5-pll-clock";
 			status = "disabled";
 		};
 
 		pll2: pll2 {
 			#clock-cells = <0>;
-			compatible = "st,stm32u5-pll-clock";
+			compatible = "st,stm32h5-pll-clock";
 			status = "disabled";
 		};
 	};
@@ -615,7 +614,6 @@
 			clocks = <&rcc STM32_CLOCK(AHB1, 0)>;
 			dma-channels = <8>;
 			dma-requests = <140>;
-			dma-offset = <0>;
 			status = "disabled";
 		};
 
@@ -627,7 +625,6 @@
 			clocks = <&rcc STM32_CLOCK(AHB1, 1)>;
 			dma-channels = <8>;
 			dma-requests = <140>;
-			dma-offset = <8>;
 			status = "disabled";
 		};
 
@@ -693,6 +690,14 @@
 			status = "disabled";
 		};
 
+		ucpd1: ucpd@4000dc00 {
+			compatible = "st,stm32-ucpd";
+			reg = <0x4000dc00 0x400>;
+			clocks = <&rcc STM32_CLOCK(APB1, 23)>;
+			interrupts = <76 0>;
+			status = "disabled";
+		};
+
 		digi_die_temp: digi_dietemp@40008c00 {
 			compatible = "st,stm32-digi-temp";
 			reg = <0x40008c00 0x400>;
@@ -748,6 +753,12 @@
 		compatible = "st,stm32-vbat";
 		ratio = <4>;
 		io-channels = <&adc1 2>;
+		status = "disabled";
+	};
+
+	vddcore: vddcore {
+		compatible = "st,stm32-vddcore";
+		io-channels = <&adc1 6>;
 		status = "disabled";
 	};
 

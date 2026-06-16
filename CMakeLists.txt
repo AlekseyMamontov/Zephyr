@@ -1865,7 +1865,7 @@ if(CONFIG_BUILD_OUTPUT_BIN)
   endif()
 endif()
 
-if(CONFIG_BUILD_OUTPUT_BIN AND CONFIG_BUILD_OUTPUT_UF2)
+if(CONFIG_BUILD_OUTPUT_UF2)
   if(CONFIG_BUILD_OUTPUT_UF2_USE_FLASH_BASE)
     set(code_address "${CONFIG_FLASH_BASE_ADDRESS}")
   else()
@@ -1885,24 +1885,58 @@ if(CONFIG_BUILD_OUTPUT_BIN AND CONFIG_BUILD_OUTPUT_UF2)
   # are typically loaded to RAM
   if(NOT CONFIG_XIP)
     if(CONFIG_BUILD_OUTPUT_ADJUST_LMA)
-      math(EXPR code_address
+      if(CONFIG_SRAM_DEPRECATED_KCONFIG_SET)
+        math(EXPR code_address
           "${CONFIG_SRAM_BASE_ADDRESS} + ${CONFIG_BUILD_OUTPUT_ADJUST_LMA} + 0"
           OUTPUT_FORMAT HEXADECIMAL
-      )
+        )
+      else()
+        dt_chosen(chosen_sram_path PROPERTY "zephyr,sram")
+        dt_reg_addr(ram_addr PATH "${chosen_sram_path}")
+
+        math(EXPR code_address
+          "${ram_addr} + ${CONFIG_BUILD_OUTPUT_ADJUST_LMA} + 0"
+          OUTPUT_FORMAT HEXADECIMAL
+        )
+      endif()
     else()
-      set(code_address "${CONFIG_SRAM_BASE_ADDRESS}")
+      if(CONFIG_SRAM_DEPRECATED_KCONFIG_SET)
+        set(code_address ${CONFIG_SRAM_BASE_ADDRESS})
+      else()
+        dt_chosen(chosen_sram_path PROPERTY "zephyr,sram")
+        dt_reg_addr(code_address PATH "${chosen_sram_path}")
+      endif()
     endif()
   endif()
 
-  list(APPEND
-    post_build_commands
-    COMMAND ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/build/uf2conv.py
-            -c
-            -f ${CONFIG_BUILD_OUTPUT_UF2_FAMILY_ID}
-            -b ${code_address}
-            -o ${KERNEL_UF2_NAME}
-            ${KERNEL_BIN_NAME}
-  )
+  if(CONFIG_BUILD_OUTPUT_HEX)
+    # HEX format embeds addresses, so no -b flag is needed.
+    # This method is required for mapped-partition.
+    list(APPEND
+      post_build_commands
+      COMMAND ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/build/uf2conv.py
+              -c
+              -f ${CONFIG_BUILD_OUTPUT_UF2_FAMILY_ID}
+              -o ${KERNEL_UF2_NAME}
+              ${KERNEL_HEX_NAME}
+    )
+  elseif(CONFIG_BUILD_OUTPUT_BIN AND NOT "${code_address}" STREQUAL "")
+    # BIN format requires an explicit base address via -b.
+    list(APPEND
+      post_build_commands
+      COMMAND ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/build/uf2conv.py
+              -c
+              -f ${CONFIG_BUILD_OUTPUT_UF2_FAMILY_ID}
+              -b ${code_address}
+              -o ${KERNEL_UF2_NAME}
+              ${KERNEL_BIN_NAME}
+    )
+  else()
+    message(WARNING
+      "UF2 output requires either a) CONFIG_BUILD_OUTPUT_HEX or b) CONFIG_BUILD_OUTPUT_BIN with a "
+      "known code address. Enable CONFIG_BUILD_OUTPUT_HEX in your board configuration.")
+  endif()
+
   list(APPEND
     post_build_byproducts
     ${KERNEL_UF2_NAME}
@@ -2400,22 +2434,13 @@ if(CONFIG_LLEXT_EDK)
   endif()
   set(llext_edk_file ${PROJECT_BINARY_DIR}/${CONFIG_LLEXT_EDK_NAME}.${llext_edk_extension})
 
-  # TODO maybe generate flags for C CXX ASM
-  zephyr_get_compile_definitions_for_lang(C zephyr_defs)
-  zephyr_get_compile_options_for_lang(C zephyr_flags)
-
-  # Filter out non LLEXT and LLEXT_EDK flags - and add required ones
-  llext_filter_zephyr_flags(LLEXT_REMOVE_FLAGS ${zephyr_flags} llext_filt_flags)
-  llext_filter_zephyr_flags(LLEXT_EDK_REMOVE_FLAGS ${llext_filt_flags} llext_filt_flags)
-
-  set(llext_edk_cflags ${zephyr_defs} -DLL_EXTENSION_BUILD)
-  list(APPEND llext_edk_cflags ${llext_filt_flags})
-  list(APPEND llext_edk_cflags ${LLEXT_APPEND_FLAGS})
-  list(APPEND llext_edk_cflags ${LLEXT_EDK_APPEND_FLAGS})
-
+  # Export current settings for use in LLEXT EDK generation
   build_info(llext-edk file PATH ${llext_edk_file})
-  build_info(llext-edk cflags VALUE ${llext_edk_cflags})
-  build_info(llext-edk include-dirs VALUE "$<TARGET_PROPERTY:zephyr_interface,INTERFACE_INCLUDE_DIRECTORIES>")
+  build_info(llext-edk remove-cflags VALUE ${LLEXT_REMOVE_FLAGS} ${LLEXT_EDK_REMOVE_FLAGS})
+  build_info(llext-edk append-cflags VALUE ${LLEXT_APPEND_FLAGS} ${LLEXT_EDK_APPEND_FLAGS} -DLL_EXTENSION_BUILD)
+
+  # Generate the compiler flag files that will be used by the EDK
+  add_subdirectory(misc/llext_edk)
 
   add_custom_command(
     OUTPUT ${llext_edk_file}
@@ -2434,7 +2459,7 @@ if(CONFIG_LLEXT_EDK)
       ${SYSCALL_SPLIT_TIMEOUT_ARG}
     COMMAND ${CMAKE_COMMAND}
         -P ${ZEPHYR_BASE}/cmake/llext-edk.cmake
-    DEPENDS ${logical_target_for_zephyr_elf} ${syscalls_json} build_info_yaml_saved
+    DEPENDS ${logical_target_for_zephyr_elf} ${syscalls_json} build_info_yaml_saved llext_edk_build_props
     COMMAND_EXPAND_LISTS
   )
   add_custom_target(llext-edk DEPENDS ${llext_edk_file})
