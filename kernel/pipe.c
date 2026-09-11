@@ -159,9 +159,14 @@ int z_impl_k_pipe_write(struct k_pipe *pipe, const uint8_t *data, size_t len, k_
 
 	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_pipe, write, pipe, data, len, timeout);
 
+	if (unlikely(len > INT_MAX)) {
+		rc = -EOVERFLOW;
+		goto out;
+	}
+
 	if (unlikely(pipe_resetting(pipe))) {
 		rc = -ECANCELED;
-		goto exit;
+		goto out;
 	}
 
 	for (;;) {
@@ -212,7 +217,7 @@ int z_impl_k_pipe_write(struct k_pipe *pipe, const uint8_t *data, size_t len, k_
 			break;
 		}
 	}
-exit:
+out:
 	SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_pipe, write, pipe, rc);
 	if (need_resched) {
 		z_reschedule(&pipe->lock, key);
@@ -232,9 +237,14 @@ int z_impl_k_pipe_read(struct k_pipe *pipe, uint8_t *data, size_t len, k_timeout
 
 	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_pipe, read, pipe, data, len, timeout);
 
+	if (unlikely(len > INT_MAX)) {
+		rc = -EOVERFLOW;
+		goto out;
+	}
+
 	if (unlikely(pipe_resetting(pipe))) {
 		rc = -ECANCELED;
-		goto exit;
+		goto out;
 	}
 
 	for (;;) {
@@ -262,7 +272,7 @@ int z_impl_k_pipe_read(struct k_pipe *pipe, uint8_t *data, size_t len, k_timeout
 			break;
 		}
 	}
-exit:
+out:
 	SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_pipe, read, pipe, rc);
 	if (need_resched) {
 		z_reschedule(&pipe->lock, key);
@@ -341,20 +351,5 @@ void z_vrfy_k_pipe_close(struct k_pipe *pipe)
 #endif /* CONFIG_USERSPACE */
 
 #ifdef CONFIG_OBJ_CORE_PIPE
-static int init_pipe_obj_core_list(void)
-{
-	/* Initialize pipe object type */
-	z_obj_type_init(&obj_type_pipe, K_OBJ_TYPE_PIPE_ID,
-			offsetof(struct k_pipe, obj_core));
-
-	/* Initialize and link statically defined pipes */
-	STRUCT_SECTION_FOREACH(k_pipe, pipe) {
-		k_obj_core_init_and_link(K_OBJ_CORE(pipe), &obj_type_pipe);
-	}
-
-	return 0;
-}
-
-SYS_INIT(init_pipe_obj_core_list, PRE_KERNEL_1,
-	 CONFIG_KERNEL_INIT_PRIORITY_OBJECTS);
+K_OBJ_TYPE_DEFINE(obj_type_pipe, k_pipe, K_OBJ_TYPE_PIPE_ID, NULL);
 #endif /* CONFIG_OBJ_CORE_PIPE */

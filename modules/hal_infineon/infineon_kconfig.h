@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: <text>Copyright (c) 2026 Infineon Technologies AG,
- * or an affiliate of Infineon Technologies AG. All rights reserved.</text>
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Infineon Technologies AG,
+ * SPDX-FileCopyrightText: or an affiliate of Infineon Technologies AG. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -408,5 +408,11 @@
 #endif
 
 #endif /* CONFIG_SOC_SERIES_PSOC4100SMAX */
+
+#if defined(CONFIG_SOC_FAMILY_INFINEON_CAT1C)
+#ifndef COMPONENT_CAT1C
+#define COMPONENT_CAT1C
+#endif
+#endif /* CONFIG_SOC_FAMILY_INFINEON_CAT1C */
 
 #endif /* INFINEON_KCONFIG_H__ */

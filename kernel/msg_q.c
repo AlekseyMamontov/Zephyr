@@ -29,7 +29,7 @@
 static struct k_obj_type obj_type_msgq;
 #endif /* CONFIG_OBJ_CORE_MSGQ */
 
-static inline bool handle_poll_events(struct k_msgq *msgq)
+static inline bool msgq_handle_poll_events(struct k_msgq *msgq)
 {
 #ifdef CONFIG_POLL
 	return z_handle_obj_poll_events(&msgq->poll_events,
@@ -107,14 +107,21 @@ int z_vrfy_k_msgq_alloc_init(struct k_msgq *msgq, size_t msg_size,
 #include <zephyr/syscalls/k_msgq_alloc_init_mrsh.c>
 #endif /* CONFIG_USERSPACE */
 
-int k_msgq_cleanup(struct k_msgq *msgq)
+int z_msgq_cleanup(struct k_msgq *msgq, __maybe_unused bool locked)
 {
-	int ret = 0;
 	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_msgq, cleanup, msgq);
 
-	CHECKIF(z_waitq_head(&msgq->wait_q) != NULL) {
+	int ret = 0;
+	k_spinlock_key_t key = k_spin_lock(&msgq->lock);
+
+	CHECKIF(locked && (z_waitq_head_locked(&msgq->wait_q) != NULL)) {
 		ret = -EBUSY;
-		goto exit;
+		goto out;
+	}
+
+	CHECKIF(!locked && (z_waitq_head(&msgq->wait_q) != NULL)) {
+		ret = -EBUSY;
+		goto out;
 	}
 
 	if ((msgq->flags & K_MSGQ_FLAG_ALLOC) != 0U) {
@@ -122,9 +129,15 @@ int k_msgq_cleanup(struct k_msgq *msgq)
 		msgq->flags &= ~K_MSGQ_FLAG_ALLOC;
 	}
 
-exit:
+out:
+	k_spin_unlock(&msgq->lock, key);
 	SYS_PORT_TRACING_OBJ_FUNC_EXIT(k_msgq, cleanup, msgq, ret);
 	return ret;
+}
+
+int k_msgq_cleanup(struct k_msgq *msgq)
+{
+	return z_msgq_cleanup(msgq, false);
 }
 
 static inline int put_msg_in_queue(struct k_msgq *msgq, const void *data,
@@ -148,7 +161,7 @@ static inline int put_msg_in_queue(struct k_msgq *msgq, const void *data,
 	if (msgq->used_msgs < msgq->max_msgs) {
 		/* message queue isn't full. Try to hand the message
 		 * directly to the longest-waiting receiver, atomically
-		 * under _sched_spinlock so a racing in-flight timeout
+		 * under the scheduler's spinlock so a racing in-flight timeout
 		 * handler cannot wake the receiver before the message
 		 * has been copied into its buffer.
 		 */
@@ -192,7 +205,7 @@ static inline int put_msg_in_queue(struct k_msgq *msgq, const void *data,
 				(void)memcpy(msgq->read_ptr, (char *)data, msgq->msg_size);
 			}
 			msgq->used_msgs++;
-			resched = handle_poll_events(msgq);
+			resched = msgq_handle_poll_events(msgq);
 		}
 		result = 0;
 	} else if (K_TIMEOUT_EQ(timeout, K_NO_WAIT)) {
@@ -312,8 +325,8 @@ int z_impl_k_msgq_get(struct k_msgq *msgq, void *data, k_timeout_t timeout)
 				((size_t)(uintptr_t)(msgq->buffer_end - msgq->write_ptr) >=
 					msgq->msg_size));
 
-		/* handle first thread waiting to write (if any).
-		 * Done atomically under _sched_spinlock so we read the
+		/* handle first thread waiting to write (if any). Done
+		 * atomically under the scheduler's spinlock so we read the
 		 * sender's swap_data and complete the wake before any
 		 * racing in-flight timeout handler can wake the sender.
 		 */
@@ -504,23 +517,5 @@ static inline uint32_t z_vrfy_k_msgq_num_used_get(struct k_msgq *msgq)
 #endif /* CONFIG_USERSPACE */
 
 #ifdef CONFIG_OBJ_CORE_MSGQ
-static int init_msgq_obj_core_list(void)
-{
-	/* Initialize msgq object type */
-
-	z_obj_type_init(&obj_type_msgq, K_OBJ_TYPE_MSGQ_ID,
-			offsetof(struct k_msgq, obj_core));
-
-	/* Initialize and link statically defined message queues */
-
-	STRUCT_SECTION_FOREACH(k_msgq, msgq) {
-		k_obj_core_init_and_link(K_OBJ_CORE(msgq), &obj_type_msgq);
-	}
-
-	return 0;
-};
-
-SYS_INIT(init_msgq_obj_core_list, PRE_KERNEL_1,
-	 CONFIG_KERNEL_INIT_PRIORITY_OBJECTS);
-
+K_OBJ_TYPE_DEFINE(obj_type_msgq, k_msgq, K_OBJ_TYPE_MSGQ_ID, NULL);
 #endif /* CONFIG_OBJ_CORE_MSGQ */
