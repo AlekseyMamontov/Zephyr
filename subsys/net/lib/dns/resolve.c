@@ -584,7 +584,7 @@ static int dispatcher_cb(struct dns_socket_dispatcher *my_ctx, int sock,
 		ctx->queries[i].additional_queries++;
 
 		ret = dns_query_servers(ctx, i, dns_data->data, len,
-					net_buf_max_len(dns_data),
+					net_buf_tailroom(dns_data),
 					dns_cname, true);
 		if (ret < 0) {
 			ret = DNS_EAI_SYSTEM;
@@ -1415,8 +1415,8 @@ static int dns_query_next_server(struct dns_resolve_context *ctx, int query_idx)
 				 pending_query->query);
 	if (!(ret < 0)) {
 		ret = dns_query_servers(ctx, query_idx, dns_data->data,
-					net_buf_max_len(dns_data),
-					net_buf_max_len(dns_data),
+					net_buf_tailroom(dns_data),
+					net_buf_tailroom(dns_data),
 					dns_qname, false);
 	}
 
@@ -1926,7 +1926,7 @@ int dns_validate_msg(struct dns_resolve_context *ctx,
 			if (dns_cname) {
 				ret = dns_copy_qname(dns_cname->data,
 						     &dns_cname->len,
-						     net_buf_max_len(dns_cname),
+						     net_buf_tailroom(dns_cname),
 						     dns_msg, pos);
 				if (ret < 0) {
 					errno = -ret;
@@ -2401,13 +2401,13 @@ int dns_resolve_cancel_with_name(struct dns_resolve_context *ctx,
 		}
 
 		ret = dns_msg_pack_qname(&len, buf->data,
-					 net_buf_max_len(buf),
+					 net_buf_tailroom(buf),
 					 query_name);
 		if (ret >= 0) {
 			/* If the query string + \0 + query type (A or AAAA)
 			 * does not fit the tmp buf, then bail out
 			 */
-			if ((len + 2) > net_buf_max_len(buf)) {
+			if ((len + 2) > net_buf_tailroom(buf)) {
 				net_buf_unref(buf);
 				return -ENOMEM;
 			}
@@ -2783,8 +2783,8 @@ try_resolve:
 	}
 
 	ret = dns_query_servers(ctx, i, dns_data->data,
-				net_buf_max_len(dns_data),
-				net_buf_max_len(dns_data),
+				net_buf_tailroom(dns_data),
+				net_buf_tailroom(dns_data),
 				dns_qname, false);
 	if (ret < 0) {
 		ret = -ENOENT;
@@ -2887,6 +2887,11 @@ static int dns_resolve_close_locked(struct dns_resolve_context *ctx)
 	}
 
 	ctx->state = DNS_RESOLVE_CONTEXT_DEACTIVATING;
+
+	/* Cancel any queries still in flight so their timers are unlinked
+	 * from the kernel timeout list before this context is torn down
+	 */
+	dns_resolve_cancel_all(ctx);
 
 	/* ctx->net_ctx is never used in "deactivating" state. Additionally
 	 * following code is guaranteed to be executed only by one thread at a
@@ -3013,8 +3018,6 @@ static int do_dns_resolve_reconfigure(struct dns_resolve_context *ctx,
 
 	if (ctx->state == DNS_RESOLVE_CONTEXT_ACTIVE &&
 	    (do_close || ctx->init_called == 0)) {
-		dns_resolve_cancel_all(ctx);
-
 		err = dns_resolve_close_locked(ctx);
 		if (err) {
 			goto unlock;
