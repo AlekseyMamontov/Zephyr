@@ -39,6 +39,7 @@ enum {
 	BT_DEV_ENABLING,    /* Host stack is being enabled */
 	BT_DEV_DISABLING,   /* Host stack is being disabled */
 	BT_DEV_OPEN,        /* HCI transport is open */
+	BT_DEV_CTLR_RX,     /* Controller has sent a packet during bt_enable() */
 	BT_DEV_READY,       /* Host stack has completed init */
 	BT_DEV_PRESET_ID,
 	BT_DEV_HAS_PUB_KEY,
@@ -91,6 +92,7 @@ enum {
 #define BT_DEV_PERSISTENT_FLAGS (BIT(BT_DEV_ENABLING) | \
 				 BIT(BT_DEV_DISABLING) | \
 				 BIT(BT_DEV_OPEN) | \
+				 BIT(BT_DEV_CTLR_RX) | \
 				 BIT(BT_DEV_PRESET_ID))
 
 #if defined(CONFIG_BT_EXT_ADV_LEGACY_SUPPORT)
@@ -521,6 +523,9 @@ enum bt_security_err bt_security_err_get(uint8_t hci_err);
 int bt_work_submit(struct k_work *work);
 int bt_work_schedule(struct k_work_delayable *work, k_timeout_t delay);
 int bt_work_reschedule(struct k_work_delayable *work, k_timeout_t delay);
+
+/* Check whether it is executing in the `bt_workq` thread context. */
+bool bt_is_work_thread(void);
 
 /* Data type to store state related with command to be updated
  * when command completes successfully.

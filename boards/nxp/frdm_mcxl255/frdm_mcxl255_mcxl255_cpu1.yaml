@@ -13,7 +13,9 @@ toolchain:
 supported:
   - uart
   - i2c
+  - gpio
   - mbox
   - rtc
   - input
+  - counter
 vendor: nxp

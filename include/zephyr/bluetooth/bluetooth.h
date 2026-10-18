@@ -60,7 +60,7 @@ extern "C" {
  *
  * @defgroup bt_gap Generic Access Profile (GAP)
  * @since 1.0
- * @version 1.1.0
+ * @version 1.1.2
  * @ingroup bluetooth
  * @{
  */
@@ -352,6 +352,9 @@ typedef void (*bt_ready_cb_t)(int err);
  * @retval -EALREADY Bluetooth is already enabled, or being enabled.
  * @retval -EAGAIN Bluetooth is being disabled; retry once bt_disable() has returned.
  * @retval -ENODEV The HCI driver is not ready.
+ * @retval -ETIMEDOUT The Controller did not respond to any command. The HCI transport is
+ *         closed, so bt_enable() can be called again without bt_disable(). With a @p cb,
+ *         the callback gets this error.
  */
 int bt_enable(bt_ready_cb_t cb);
 
@@ -376,7 +379,13 @@ int bt_enable(bt_ready_cb_t cb);
  *
  * Close and release HCI resources. Result is architecture dependent.
  *
+ * If the HCI driver fails to close its transport, the error is returned with
+ * Bluetooth left not ready, as the Host has torn down its state, connections
+ * included, by then. bt_disable() can be called again.
+ *
  * @return 0 on success, negative errno value on failure.
+ * @retval -ENOSYS The HCI driver does not support closing its transport. Bluetooth is
+ *                 left as it was.
  * @retval -EALREADY Bluetooth is already disabled, or being disabled.
  * @retval -EAGAIN Bluetooth is still being enabled, which with @kconfig{CONFIG_BT_SETTINGS}
  *                 includes loading the Bluetooth settings; retry once bt_is_ready() returns true.

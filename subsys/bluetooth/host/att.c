@@ -604,7 +604,7 @@ static int process_queue(struct bt_att_chan *chan, struct k_fifo *queue)
 		err = bt_att_chan_send(chan, buf);
 		if (err) {
 			/* Push it back if it could not be send */
-			k_queue_prepend(&queue->_queue, buf);
+			k_queue_prepend(&queue->_queue, net_buf_take(&buf));
 			return err;
 		}
 
@@ -894,7 +894,7 @@ static void bt_att_chan_send_rsp(struct bt_att_chan *chan, struct net_buf *buf)
 	err = chan_send(chan, buf);
 	if (err) {
 		/* Responses need to be sent back using the same channel */
-		k_fifo_put(&chan->tx_queue, buf);
+		k_fifo_put(&chan->tx_queue, net_buf_take(&buf));
 	}
 }
 
@@ -2327,7 +2327,7 @@ static uint8_t att_prep_write_rsp(struct bt_att_chan *chan, uint16_t handle,
 	LOG_DBG("buf %p handle 0x%04x offset %u", data.buf, handle, offset);
 
 	/* Store buffer in the outstanding queue */
-	net_buf_slist_put(&chan->att->prep_queue, data.buf);
+	net_buf_slist_put(&chan->att->prep_queue, net_buf_take(&data.buf));
 
 	/* Generate response */
 	data.buf = att_create_rsp_pdu(chan, BT_ATT_OP_PREPARE_WRITE_RSP);
@@ -2414,10 +2414,28 @@ static uint8_t exec_write_reassemble(uint16_t handle, uint16_t offset,
 	return BT_ATT_ERR_SUCCESS;
 }
 
+static void att_prep_queue_clear(struct bt_att *att)
+{
+	struct net_buf *buf;
+
+	buf = net_buf_slist_get(&att->prep_queue);
+	while (buf != NULL) {
+		net_buf_unref(buf);
+		buf = net_buf_slist_get(&att->prep_queue);
+	}
+}
+
 static uint8_t att_exec_write_rsp(struct bt_att_chan *chan, uint8_t flags)
 {
 	struct net_buf *buf;
-	uint8_t err = 0U;
+
+	if (flags != BT_ATT_FLAG_EXEC) {
+		/* Core v6.3 Vol 3 Part F 3.4.6.3: the prepared values are
+		 * discarded, the queue is cleared and the response is sent.
+		 */
+		att_prep_queue_clear(chan->att);
+		goto rsp;
+	}
 
 	/* The following code will iterate on all prepare writes in the
 	 * prep_queue, and reassemble those that share the same handle.
@@ -2427,6 +2445,7 @@ static uint8_t att_exec_write_rsp(struct bt_att_chan *chan, uint8_t flags)
 	while (!sys_slist_is_empty(&chan->att->prep_queue)) {
 		struct bt_attr_data *data;
 		uint16_t handle;
+		uint8_t err;
 
 		NET_BUF_SIMPLE_DEFINE_STATIC(reassembled_data,
 					     MIN(BT_ATT_MAX_ATTRIBUTE_LEN,
@@ -2446,33 +2465,27 @@ static uint8_t att_exec_write_rsp(struct bt_att_chan *chan, uint8_t flags)
 					    &reassembled_data);
 		if (err != BT_ATT_ERR_SUCCESS) {
 			/* Discard queued buffers */
-			do {
-				net_buf_unref(buf);
-				buf = net_buf_slist_get(&chan->att->prep_queue);
-			} while (buf != NULL);
+			net_buf_unref(buf);
+			att_prep_queue_clear(chan->att);
 			send_err_rsp(chan, BT_ATT_OP_EXEC_WRITE_REQ,
 				     handle, err);
 			return 0;
 		}
 
-		/* Just discard the data if an error was set */
-		if (!err && flags == BT_ATT_FLAG_EXEC) {
-			err = perform_write(chan, BT_ATT_OP_EXEC_WRITE_REQ, handle, data->offset,
-					    reassembled_data.data, reassembled_data.len);
-			if (err) {
-				/* Respond here since handle is set */
-				send_err_rsp(chan, BT_ATT_OP_EXEC_WRITE_REQ,
-					     data->handle, err);
-			}
-		}
-
+		err = perform_write(chan, BT_ATT_OP_EXEC_WRITE_REQ, handle, data->offset,
+				    reassembled_data.data, reassembled_data.len);
 		net_buf_unref(buf);
+		if (err != BT_ATT_ERR_SUCCESS) {
+			/* Core v6.3 Vol 3 Part F 3.4.6.3: the queue is cleared
+			 * and only an Error Response is sent.
+			 */
+			att_prep_queue_clear(chan->att);
+			send_err_rsp(chan, BT_ATT_OP_EXEC_WRITE_REQ, handle, err);
+			return 0;
+		}
 	}
 
-	if (err) {
-		return 0;
-	}
-
+rsp:
 	/* Generate response */
 	buf = att_create_rsp_pdu(chan, BT_ATT_OP_EXEC_WRITE_RSP);
 	if (!buf) {
@@ -3157,9 +3170,7 @@ static void att_reset(struct bt_att *att)
 
 #if CONFIG_BT_ATT_PREPARE_COUNT > 0
 	/* Discard queued buffers */
-	while ((buf = net_buf_slist_get(&att->prep_queue))) {
-		net_buf_unref(buf);
-	}
+	att_prep_queue_clear(att);
 #endif /* CONFIG_BT_ATT_PREPARE_COUNT > 0 */
 
 #if defined(CONFIG_BT_EATT)
@@ -3308,6 +3319,7 @@ static void bt_att_disconnected(struct bt_l2cap_chan *chan)
 }
 
 #if defined(CONFIG_BT_SMP)
+#if defined(CONFIG_BT_ATT_RETRY_ON_SEC_ERR)
 static uint8_t att_req_retry(struct bt_att_chan *att_chan)
 {
 	struct bt_att_req *req = att_chan->req;
@@ -3338,6 +3350,7 @@ static uint8_t att_req_retry(struct bt_att_chan *att_chan)
 
 	return BT_ATT_ERR_SUCCESS;
 }
+#endif /* CONFIG_BT_ATT_RETRY_ON_SEC_ERR */
 
 static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 				  uint8_t hci_status)
@@ -3345,7 +3358,6 @@ static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 	struct bt_att_chan *att_chan = ATT_CHAN(chan);
 	struct bt_l2cap_le_chan *le_chan = BT_L2CAP_LE_CHAN(chan);
 	struct bt_conn *conn = le_chan->chan.conn;
-	uint8_t err;
 
 	LOG_DBG("chan %p conn %p handle %u sec_level 0x%02x status 0x%02x %s", le_chan, conn,
 		conn->handle, conn->sec_level, hci_status, bt_hci_err_to_str(hci_status));
@@ -3360,10 +3372,12 @@ static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 	 * outstanding request about security failure.
 	 */
 	if (hci_status) {
+#if defined(CONFIG_BT_ATT_RETRY_ON_SEC_ERR)
 		if (att_chan->req && att_chan->req->retrying) {
 			att_handle_rsp(att_chan, NULL, 0,
 				       BT_ATT_ERR_AUTHENTICATION);
 		}
+#endif /* CONFIG_BT_ATT_RETRY_ON_SEC_ERR */
 
 		return;
 	}
@@ -3373,6 +3387,9 @@ static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 	if (conn->sec_level == BT_SECURITY_L1) {
 		return;
 	}
+
+#if defined(CONFIG_BT_ATT_RETRY_ON_SEC_ERR)
+	uint8_t err;
 
 	if (!(att_chan->req && att_chan->req->retrying)) {
 		return;
@@ -3385,6 +3402,7 @@ static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 		LOG_DBG("Retry failed (%d)", err);
 		att_handle_rsp(att_chan, NULL, 0, err);
 	}
+#endif /* CONFIG_BT_ATT_RETRY_ON_SEC_ERR */
 }
 #endif /* CONFIG_BT_SMP */
 
@@ -3977,6 +3995,54 @@ uint16_t bt_att_get_uatt_mtu(struct bt_conn *conn)
 	return 0;
 }
 
+int bt_att_get_max_notify_size(struct bt_conn *conn, enum bt_att_chan_opt chan_opt)
+{
+	/* Opcode (1 octet) + attribute handle (2 octets) */
+	const uint16_t att_ntf_hdr_size = sizeof(struct bt_att_hdr) + sizeof(struct bt_att_notify);
+	struct bt_att_chan *chan, *tmp;
+	struct bt_att *att;
+	uint16_t mtu = 0;
+
+	if (conn == NULL) {
+		return -EINVAL;
+	}
+
+	if (!bt_conn_is_le(conn)) {
+		LOG_DBG("conn %p is not LE ACL", conn);
+		return -EINVAL;
+	}
+
+	if (conn->state != BT_CONN_CONNECTED) {
+		LOG_DBG("conn %p is not connected (%d)", conn, conn->state);
+		return -ENOTCONN;
+	}
+
+	if ((!IS_ENABLED(CONFIG_BT_EATT) && (chan_opt & BT_ATT_CHAN_OPT_ENHANCED_ONLY) != 0) ||
+	    !(chan_opt == BT_ATT_CHAN_OPT_NONE || chan_opt == BT_ATT_CHAN_OPT_UNENHANCED_ONLY ||
+	      chan_opt == BT_ATT_CHAN_OPT_ENHANCED_ONLY)) {
+		LOG_DBG("Invalid channel options %d for conn %p", chan_opt, conn);
+		return -EINVAL;
+	}
+
+	att = att_get(conn);
+	if (att == NULL) {
+		LOG_DBG("Could not get ATT for conn %p", conn);
+		return -ENOTCONN;
+	}
+
+	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
+		if (att_chan_matches_chan_opt(chan, chan_opt) && (bt_att_mtu(chan) > mtu)) {
+			mtu = bt_att_mtu(chan);
+		}
+	}
+
+	if (mtu > att_ntf_hdr_size) {
+		return (int)(mtu - att_ntf_hdr_size);
+	}
+
+	return 0;
+}
+
 static void att_chan_mtu_updated(struct bt_att_chan *updated_chan)
 {
 	struct bt_att *att = updated_chan->att;
@@ -4061,7 +4127,7 @@ int bt_att_send(struct bt_conn *conn, struct net_buf *buf)
 		return -ENOTCONN;
 	}
 
-	k_fifo_put(&att->tx_queue, buf);
+	k_fifo_put(&att->tx_queue, net_buf_take(&buf));
 	att_send_process(att);
 
 	return 0;
@@ -4106,6 +4172,21 @@ static bool bt_att_chan_req_cancel(struct bt_att_chan *chan,
 	if (chan->req != req) {
 		return false;
 	}
+
+#if defined(CONFIG_BT_ATT_RETRY_ON_SEC_ERR)
+	/* A request waiting for a security retry has already had its error
+	 * response consumed and its timeout stopped, so neither a response
+	 * nor a timeout is left to clear the placeholder: release the bearer
+	 * now and let the next queued request use it.
+	 */
+	if (req->retrying) {
+		chan->req = NULL;
+		bt_att_req_free(req);
+		att_req_send_process(chan->att);
+
+		return true;
+	}
+#endif /* CONFIG_BT_ATT_RETRY_ON_SEC_ERR */
 
 	chan->req = &cancel;
 

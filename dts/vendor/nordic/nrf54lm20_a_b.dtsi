@@ -266,6 +266,11 @@
 					ghwcfg1 = <0x0>;
 					ghwcfg2 = <0x22affc52>;
 					ghwcfg4 = <0x3e10aa60>;
+					/* 3040 locations with full flexibility */
+					g-rx-fifo-size = <592>;
+					g-np-tx-fifo-size = <32>;
+					g-tx-fifo-size = <512 256 256 256 256 256 256 256
+							  16 16 16 16 16 16 16>;
 					status = "disabled";
 				};
 
@@ -591,6 +596,8 @@
 			adc: adc@d5000 {
 				compatible = "nordic,nrf-saadc";
 				reg = <0xd5000 0x1000>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				interrupts = <213 NRF_DEFAULT_IRQ_PRIORITY>;
 				status = "disabled";
 				#io-channel-cells = <1>;

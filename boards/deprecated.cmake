@@ -31,8 +31,8 @@ set(esp32s3_devkitm/esp32s3/appcpu_DEPRECATED
 set(ubx_evk_iris_w1_fidelex/rw612_DEPRECATED
     ubx_evk_iris_w1@fidelix/rw612
 )
-set(it51xxx_evb_DEPRECATED
-    it515xx_evb/it51526aw
+set(it515xx_evb_DEPRECATED
+    it51xxx_evb/it51526aw
 )
 set(weact_stm32h5_core_DEPRECATED
     weact_stm32h562_core
@@ -117,4 +117,13 @@ set(w6100_evb_pico2/rp2350a/m33_DEPRECATED
 )
 set(w6300_evb_pico2/rp2350a/m33_DEPRECATED
     w6300_evb_pico2/rp2350a/m33_0
+)
+set(stm32mp157c_dk2_DEPRECATED
+    stm32mp157x_dk2/stm32mp157cxx
+)
+set(kit_psc3m6_evk_DEPRECATED
+    kit_psc3m6_eval
+)
+set(kit_psc3m6_evk/psc3m6ges3ahq1_DEPRECATED
+    kit_psc3m6_eval/psc3m6ges3ahq1
 )

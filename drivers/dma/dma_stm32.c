@@ -114,28 +114,90 @@ static int dma_stm32_hal_map_addr_adj(enum dma_addr_adj z_adj, uint32_t *hal_inc
 	}
 }
 
+#if defined(DMA_MBURST_SINGLE) || defined(DMA_PBURST_SINGLE)
+static int dma_stm32_hal_map_burst(uint32_t z_burst, uint32_t z_size, uint32_t *hal_burst,
+				   uint32_t hal_single, uint32_t hal_inc4, uint32_t hal_inc8,
+				   uint32_t hal_inc16)
+{
+	/* A burst length the caller left unset means single transfers */
+	if (z_burst == 0 || z_size == 0) {
+		*hal_burst = hal_single;
+		return 0;
+	}
+
+	if (z_burst % z_size != 0) {
+		return -ENOTSUP;
+	}
+
+	switch (z_burst / z_size) {
+	case 1:
+		*hal_burst = hal_single;
+		return 0;
+	case 4:
+		*hal_burst = hal_inc4;
+		return 0;
+	case 8:
+		*hal_burst = hal_inc8;
+		return 0;
+	case 16:
+		*hal_burst = hal_inc16;
+		return 0;
+	default:
+		return -ENOTSUP;
+	}
+}
+#endif /* DMA_MBURST_SINGLE || DMA_PBURST_SINGLE */
+
 static int dma_stm32_hal_config_widths(const struct dma_config *cfg, DMA_InitTypeDef *hal_config)
 {
 	uint32_t periph_dsize, mem_dsize;
+	uint32_t periph_burst, mem_burst;
 	int ret;
 
 	switch (cfg->channel_direction) {
 	case MEMORY_TO_PERIPHERAL:
 		periph_dsize = cfg->dest_data_size;
+		periph_burst = cfg->dest_burst_length;
 		mem_dsize = cfg->source_data_size;
+		mem_burst = cfg->source_burst_length;
 		break;
 	case MEMORY_TO_MEMORY:
-		if (cfg->source_data_size != cfg->dest_data_size) {
+		if (cfg->source_data_size != cfg->dest_data_size ||
+		    cfg->source_burst_length != cfg->dest_burst_length) {
 			return -ENOTSUP;
 		}
 		__fallthrough;
 	case PERIPHERAL_TO_MEMORY:
 		periph_dsize = cfg->source_data_size;
+		periph_burst = cfg->source_burst_length;
 		mem_dsize = cfg->dest_data_size;
+		mem_burst = cfg->dest_burst_length;
 		break;
 	default:
 		return -ENOTSUP;
 	}
+
+#ifdef DMA_PBURST_SINGLE
+	ret = dma_stm32_hal_map_burst(periph_burst, periph_dsize, &hal_config->PeriphBurst,
+				      DMA_PBURST_SINGLE, DMA_PBURST_INC4, DMA_PBURST_INC8,
+				      DMA_PBURST_INC16);
+	if (ret < 0) {
+		return ret;
+	}
+#else
+	ARG_UNUSED(periph_burst);
+#endif /* DMA_PBURST_SINGLE */
+
+#ifdef DMA_MBURST_SINGLE
+	ret = dma_stm32_hal_map_burst(mem_burst, mem_dsize, &hal_config->MemBurst,
+				      DMA_MBURST_SINGLE, DMA_MBURST_INC4, DMA_MBURST_INC8,
+				      DMA_MBURST_INC16);
+	if (ret < 0) {
+		return ret;
+	}
+#else
+	ARG_UNUSED(mem_burst);
+#endif /* DMA_MBURST_SINGLE */
 
 	ret = dma_stm32_hal_map_data_size(periph_dsize, &hal_config->PeriphDataAlignment,
 					  DMA_PDATAALIGN_BYTE, DMA_PDATAALIGN_HALFWORD,
@@ -183,7 +245,8 @@ static int dma_stm32_hal_config_increments(uint16_t source_addr_adj, uint16_t de
  * Default DMA driver configuration relies on these values,
  * in case the fields have not been initialized in the @p zephyr_config.
  *
- * hal_config->Channel			= DMA_CHANNEL_0;
+ * hal_config->Request			= DMA_CHANNEL_0;
+ * (On STM32F2/F4/F7 series this field is hal_config->Channel)
  * hal_config->Direction		= DMA_PERIPH_TO_MEMORY;
  * hal_config->PeriphInc		= DMA_PINC_DISABLE;
  * hal_config->MemInc			= DMA_MINC_DISABLE;
@@ -191,8 +254,10 @@ static int dma_stm32_hal_config_increments(uint16_t source_addr_adj, uint16_t de
  * hal_config->MemDataAlignment		= DMA_MDATAALIGN_BYTE;
  * hal_config->Mode			= DMA_NORMAL;
  * hal_config->Priority			= DMA_PRIORITY_LOW;
+ *
+ * Those 4 fields apply only for CONFIG_DMA_STM32_V1 along with above:
  * hal_config->FIFOMode			= DMA_FIFOMODE_DISABLE;
- * hal_config->FIFOThreshold		= DMA_FIFO_THRESHOLD_1QUARTERFULL;
+ * hal_config->FIFOThreshold		= DMA_FIFO_THRESHOLD_FULL;
  * hal_config->MemBurst			= DMA_MBURST_SINGLE;
  * hal_config->PeriphBurst		= DMA_PBURST_SINGLE;
  */
@@ -250,14 +315,6 @@ int dma_stm32_zcfg_to_halcfg(const struct device *dma, const struct dma_config *
 
 #ifdef DMA_FIFO_THRESHOLD_FULL
 	hal_config->FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
-#endif
-
-#ifdef DMA_MBURST_SINGLE
-	hal_config->MemBurst = DMA_MBURST_SINGLE;
-#endif
-
-#ifdef DMA_PBURST_SINGLE
-	hal_config->PeriphBurst = DMA_PBURST_SINGLE;
 #endif
 
 	return 0;
