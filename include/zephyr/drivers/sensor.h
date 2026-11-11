@@ -1402,6 +1402,21 @@ static inline float sensor_value_to_float(const struct sensor_value *val)
 }
 
 /**
+ * @brief Helper function for converting struct sensor_value to q31.
+ *
+ * @param val A pointer to a sensor_value struct.
+ * @param shift The number of bits to right shift the input value.
+ * @return The converted value.
+ */
+static inline q31_t sensor_value_to_q31(const struct sensor_value *val, int8_t shift)
+{
+	int64_t whole = (int64_t)val->val1 * (INT64_C(1) << 31);
+	int64_t frac = (((int64_t)val->val2) * (INT64_C(1) << 31)) / 1000000;
+
+	return (q31_t)CLAMP((whole + frac) >> shift, INT32_MIN, INT32_MAX);
+}
+
+/**
  * @brief Helper function for converting struct sensor_value to fixed-point.
  *
  * @param val A pointer to a fixed-point value in Qm.n format.
@@ -1694,7 +1709,7 @@ static inline int sensor_value_from_micro(struct sensor_value *val, int64_t micr
  * @param out Resulting sum.
  * @return 0 if successful, negative errno code if failure.
  */
-static inline int sensor_value_add(struct sensor_value *inp1, struct sensor_value *inp2,
+static inline int sensor_value_add(const struct sensor_value *inp1, const struct sensor_value *inp2,
 				   struct sensor_value *out)
 {
 	int64_t val1 = (int64_t)inp1->val1 + (int64_t)inp2->val1;
@@ -1726,8 +1741,8 @@ static inline int sensor_value_add(struct sensor_value *inp1, struct sensor_valu
  * @param out Resulting difference.
  * @return 0 if successful, negative errno code if failure.
  */
-static inline int sensor_value_subtract(struct sensor_value *inp1, struct sensor_value *inp2,
-					struct sensor_value *out)
+static inline int sensor_value_subtract(const struct sensor_value *inp1,
+					const struct sensor_value *inp2, struct sensor_value *out)
 {
 	int64_t val1 = (int64_t)inp1->val1 - (int64_t)inp2->val1;
 	int32_t val2 = inp1->val2 - inp2->val2;
@@ -1758,8 +1773,8 @@ static inline int sensor_value_subtract(struct sensor_value *inp1, struct sensor
  * @param out Resulting product.
  * @return 0 if successful, negative errno code if failure.
  */
-static inline int sensor_value_multiply(struct sensor_value *inp1, struct sensor_value *inp2,
-					struct sensor_value *out)
+static inline int sensor_value_multiply(const struct sensor_value *inp1,
+					const struct sensor_value *inp2, struct sensor_value *out)
 {
 	int64_t val1 = (int64_t)inp1->val1 * inp2->val1;
 	int64_t val2 = (int64_t)inp1->val1 * inp2->val2 + (int64_t)inp1->val2 * inp2->val1 +
@@ -1786,7 +1801,7 @@ static inline int sensor_value_multiply(struct sensor_value *inp1, struct sensor
  * @param out Scaled output.
  * @return 0 if successful, negative errno code if failure.
  */
-static inline int sensor_value_scale(struct sensor_value *inp, int32_t scalar,
+static inline int sensor_value_scale(const struct sensor_value *inp, int32_t scalar,
 				     struct sensor_value *out)
 {
 	int64_t val1 = (int64_t)inp->val1 * scalar;
@@ -1804,10 +1819,6 @@ static inline int sensor_value_scale(struct sensor_value *inp, int32_t scalar,
 
 	return 0;
 }
-
-/**
- * @}
- */
 
 /**
  * @brief Get the decoder name for the current driver
@@ -1844,6 +1855,10 @@ static inline int sensor_value_scale(struct sensor_value *inp, int32_t scalar,
 #define SENSOR_DECODER_API_DT_DEFINE()                                                             \
 	COND_CODE_1(DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT), (), (static))                        \
 	const STRUCT_SECTION_ITERABLE(sensor_decoder_api, SENSOR_DECODER_NAME())
+
+/**
+ * @}
+ */
 
 #define Z_MAYBE_SENSOR_DECODER_DECLARE_INTERNAL_IDX(node_id, prop, idx)                            \
 	extern const struct sensor_decoder_api UTIL_CAT(                                           \

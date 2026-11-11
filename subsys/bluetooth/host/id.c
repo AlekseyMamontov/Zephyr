@@ -242,7 +242,8 @@ static void adv_rpa_expired(struct bt_le_ext_adv *adv, void *data)
 		}
 		bool *rpa_invalid_set_ptr = data;
 
-		if (!rpa_invalid) {
+		/* NULL when limited advertising ends, which rotates no shared RPA */
+		if (!rpa_invalid && rpa_invalid_set_ptr != NULL) {
 			rpa_invalid_set_ptr[adv->id] = false;
 		}
 	} else {
@@ -653,9 +654,14 @@ static void le_update_private_addr(void)
 
 	/* If both advertiser and scanner is running then the advertiser
 	 * ID must be BT_ID_DEFAULT, this will update the RPA address
-	 * for both roles.
+	 * for both roles. An advertiser using an NRPA gets a new NRPA,
+	 * which a running scanner then shares.
 	 */
-	err = bt_id_set_private_addr(id);
+	if (adv_enabled && (adv->options & BT_LE_ADV_OPT_USE_NRPA) != 0U) {
+		err = bt_id_set_adv_private_addr(adv, adv->options);
+	} else {
+		err = bt_id_set_private_addr(id);
+	}
 	if (err) {
 		LOG_WRN("Failed to update RPA address (%d)", err);
 		return;
@@ -726,8 +732,10 @@ static void rpa_timeout(struct k_work *work)
 	adv_enabled = le_adv_rpa_timeout();
 	le_rpa_invalidate();
 
-	/* IF no roles using the RPA is running we can stop the RPA timer */
-	if (IS_ENABLED(CONFIG_BT_CENTRAL)) {
+	/* If no roles using the RPA are running we can stop the RPA timer. Without
+	 * a Broadcaster there are no advertising sets to call rpa_expired for.
+	 */
+	if (IS_ENABLED(CONFIG_BT_CENTRAL) || !IS_ENABLED(CONFIG_BT_BROADCASTER)) {
 		if (!(adv_enabled || atomic_test_bit(bt_dev.flags, BT_DEV_INITIATING) ||
 		      bt_le_scan_active_scanner_running())) {
 			return;
@@ -864,7 +872,7 @@ static int le_set_privacy_mode(const bt_addr_le_t *addr, uint8_t mode)
 	int err;
 
 	/* Check if set privacy mode command is supported */
-	if (!BT_CMD_TEST(bt_dev.supported_commands, 39, 2)) {
+	if (!bt_dev_cmd_supported(BT_DEV_CMD_LE_SET_PRIVACY_MODE)) {
 		LOG_WRN("Set privacy mode command is not supported");
 		return 0;
 	}
@@ -1661,7 +1669,7 @@ int bt_id_reset_irk(uint8_t id, uint8_t *irk)
 		return -EBUSY;
 	}
 
-	if (bt_keys_has_bond(id)) {
+	if (IS_ENABLED(CONFIG_BT_SMP) && bt_keys_has_bond(id)) {
 		return -ENOTEMPTY;
 	}
 
@@ -1765,6 +1773,22 @@ uint8_t bt_id_read_public_addr(bt_addr_le_t *addr)
 	return 1U;
 }
 
+/* IRK = d1(IR, 1, 0), Core v6.3, Vol 3, Part H, Appendix B.2.3 */
+static bool irk_from_ir(const uint8_t ir[16], uint8_t irk[BT_IRK_SIZE])
+{
+	static const uint8_t invalid_ir[16] = { 0 };
+
+	if (util_memeq(ir, invalid_ir, sizeof(invalid_ir))) {
+		return false;
+	}
+
+	sys_put_le16(1U, &irk[0]);
+	sys_put_le16(0U, &irk[2]);
+	(void)memset(&irk[4], 0, BT_IRK_SIZE - 4);
+
+	return bt_encrypt_le(ir, irk, irk) == 0;
+}
+
 int bt_setup_public_id_addr(void)
 {
 	bt_addr_le_t addr;
@@ -1783,7 +1807,7 @@ int bt_setup_public_id_addr(void)
 	bt_read_identity_root(ir);
 
 	if (!IS_ENABLED(CONFIG_BT_PRIVACY_RANDOMIZE_IR)) {
-		if (!bt_smp_irk_get(ir, ir_irk)) {
+		if (irk_from_ir(ir, ir_irk)) {
 			irk = ir_irk;
 		}
 	}
@@ -1873,7 +1897,7 @@ int bt_setup_random_id_addr(void)
 
 			if (IS_ENABLED(CONFIG_BT_PRIVACY) &&
 			    !IS_ENABLED(CONFIG_BT_PRIVACY_RANDOMIZE_IR)) {
-				if (!bt_smp_irk_get(addrs[i].ir, ir_irk)) {
+				if (irk_from_ir(addrs[i].ir, ir_irk)) {
 					irk = ir_irk;
 				}
 			}
@@ -1909,6 +1933,25 @@ int bt_setup_random_id_addr(void)
 	return bt_id_create(NULL, NULL);
 }
 
+/* The scanner and the initiator share the random address with a legacy
+ * advertiser, which can hold an NRPA there.
+ */
+static bool is_legacy_adv_using_nrpa(void)
+{
+	struct bt_le_ext_adv *adv;
+
+	if (!IS_ENABLED(CONFIG_BT_BROADCASTER) ||
+	    (IS_ENABLED(CONFIG_BT_EXT_ADV) &&
+	     BT_DEV_FEAT_LE_EXT_ADV(bt_dev.le.features))) {
+		return false;
+	}
+
+	adv = bt_le_adv_lookup_legacy();
+
+	return adv != NULL && atomic_test_bit(adv->flags, BT_ADV_ENABLED) &&
+	       (adv->options & BT_LE_ADV_OPT_USE_NRPA) != 0U;
+}
+
 #if defined(CONFIG_BT_CENTRAL)
 static inline bool rpa_timeout_valid_check(void)
 {
@@ -1931,6 +1974,13 @@ int bt_id_set_create_conn_own_addr(bool use_filter, uint8_t *own_addr_type)
 	}
 
 	if (IS_ENABLED(CONFIG_BT_PRIVACY)) {
+		if (is_legacy_adv_using_nrpa()) {
+			/* The initiator must use an RPA, but the shared random
+			 * address holds the advertiser's NRPA.
+			 */
+			return -EINVAL;
+		}
+
 		if (use_filter || rpa_timeout_valid_check()) {
 			err = bt_id_set_private_addr(BT_ID_DEFAULT);
 			if (err) {
@@ -1971,6 +2021,18 @@ int bt_id_set_create_conn_own_addr(bool use_filter, uint8_t *own_addr_type)
 	}
 
 	return 0;
+}
+
+bool bt_id_conn_random_addr_check(void)
+{
+	/* The initiator must use an RPA, but the shared random address holds
+	 * the advertiser's NRPA.
+	 */
+	if (IS_ENABLED(CONFIG_BT_PRIVACY) && is_legacy_adv_using_nrpa()) {
+		return false;
+	}
+
+	return bt_id_scan_random_addr_check();
 }
 #endif /* defined(CONFIG_BT_CENTRAL) */
 
@@ -2023,6 +2085,14 @@ int bt_id_set_scan_own_addr(bool active_scan, uint8_t *own_addr_type)
 	}
 
 	if (IS_ENABLED(CONFIG_BT_PRIVACY)) {
+		if (is_legacy_adv_using_nrpa()) {
+			/* Scan with the advertiser's NRPA, the random address
+			 * cannot change while the advertiser is enabled.
+			 */
+			*own_addr_type = BT_HCI_OWN_ADDR_RANDOM;
+
+			return 0;
+		}
 
 		if (BT_FEAT_LE_PRIVACY(bt_dev.le.features)) {
 			*own_addr_type = BT_HCI_OWN_ADDR_RPA_OR_RANDOM;
@@ -2330,6 +2400,13 @@ int bt_le_oob_get_local(uint8_t id, struct bt_le_oob *oob)
 			/* Cannot set a new RPA address while advertising with
 			 * random static identity address for a different
 			 * identity.
+			 */
+			return -EINVAL;
+		}
+
+		if (is_legacy_adv_using_nrpa()) {
+			/* Cannot set a new RPA address while advertising with
+			 * an NRPA.
 			 */
 			return -EINVAL;
 		}

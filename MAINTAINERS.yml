@@ -226,6 +226,9 @@ ADI Platforms:
     - boards/shields/ad_apardpfw_sl/
     - boards/shields/adi_lsmspg/
     - boards/shields/eval*ardz/
+    - boards/shields/mikroe_accel_click/
+    - boards/shields/mikroe_accel22_click/
+    - boards/shields/mikroe_adac_click/
     - boards/shields/pmod_acl/
     - drivers/*/*max*
     - drivers/*/*max*/
@@ -347,6 +350,7 @@ ARM64 arch:
     - npitre
     - JiafeiPan
     - carlocaione
+    - hongquan-prog
   files:
     - arch/arm64/
     - include/zephyr/arch/arm64/
@@ -362,12 +366,20 @@ ARM64 arch:
     - kernel
 
 ASPEED Platforms:
-  status: odd fixes
+  status: maintained
+  maintainers:
+    - billy-tsai
   files:
+    - boards/aspeed/
     - soc/aspeed/
     - dts/arm/aspeed/
+    - dts/riscv/aspeed/
+    - dts/bindings/*/aspeed,*
     - drivers/*/*_ast10x0.c
+    - drivers/*/*_ast27xx*.c
+    - drivers/*/*ast2700*.c
     - drivers/*/Kconfig.aspeed
+    - include/zephyr/dt-bindings/*/ast27xx*
   labels:
     - "platform: ASPEED"
 
@@ -396,9 +408,11 @@ Alif Semiconductor Platforms:
   files:
     - boards/alif/
     - drivers/*/*alif*
+    - drivers/*/*/*alif*
     - dts/arm/alif/
     - dts/bindings/*/alif,*
     - include/zephyr/dt-bindings/*/alif*.h
+    - scripts/west_commands/runners/alif_flash.py
     - soc/alif/
   labels:
     - "platform: Alif Semiconductor"
@@ -591,6 +605,7 @@ Binary Descriptors:
     - include/zephyr/bindesc.h
     - samples/subsys/bindesc/
     - scripts/west_commands/bindesc.py
+    - scripts/west_commands/tests/test_bindesc.py
     - tests/subsys/bindesc/
   labels:
     - "area: Binary Descriptors"
@@ -630,6 +645,7 @@ Bluetooth Audio:
     - jthm-ot
     - alexsven
     - koffes
+    - ciascai
   files:
     - subsys/bluetooth/audio/
     - include/zephyr/bluetooth/audio/
@@ -753,7 +769,7 @@ Bluetooth Host:
     - sjanc
     - Thalley
     - cvinayak
-    - HaavardRei
+    - KyraLengfeld
     - alxelax
     - lylezhu2012
   files:
@@ -849,9 +865,7 @@ Bluetooth Mesh:
     - PavelVPV
     - LingaoM
     - akredalen
-    - HaavardRei
     - omkar3141
-    - KyraLengfeld
     - ludvigsj
   files:
     - doc/services/connectivity/bluetooth/api/mesh/
@@ -949,6 +963,7 @@ Bouffalolab Platforms:
     - boards/others/bl704l_dvk/
     - boards/thirdreality/
     - boards/pine64/pinecone/
+    - boards/pine64/pinedio_zigbee_dongle/
     - boards/sipeed/m0sense/
     - boards/sipeed/m1s_dock/
     - boards/sipeed/maix_m0s_dock/
@@ -1368,10 +1383,9 @@ Demand Paging:
 Device Driver Model:
   status: maintained
   maintainers:
-    - tbursztyka
+    - nashif
   collaborators:
     - dcpleung
-    - nashif
     - edersondisouza
   files:
     - include/zephyr/device.h
@@ -1488,6 +1502,19 @@ Display controllers:
     - display.cfb
     - drivers.display
     - sample.display
+
+Division by Reciprocal:
+  status: maintained
+  maintainers:
+    - npitre
+  files:
+    - doc/kernel/div64.rst
+    - include/zephyr/sys/div64.h
+    - lib/os/div64.c
+    - tests/lib/div64/
+    - tests/unit/time_units/reciprocal.c
+  tests:
+    - libraries.div64
 
 Documentation:
   status: maintained
@@ -2454,6 +2481,7 @@ Documentation Infrastructure:
     - include/zephyr/dt-bindings/mfd/
     - dts/bindings/mfd/
     - tests/drivers/build_all/mfd/
+    - tests/drivers/mfd/
   labels:
     - "area: MFD"
   tests:
@@ -2693,8 +2721,11 @@ Documentation Infrastructure:
   files:
     - drivers/ptp_clock/
     - include/zephyr/drivers/ptp_clock.h
+    - tests/drivers/ptp_clock/
   labels:
     - "area: Clocks"
+  tests:
+    - drivers.ptp_clock
 
 "Drivers: PWM":
   status: maintained
@@ -2882,11 +2913,10 @@ Documentation Infrastructure:
     - sample.drivers.smbus
 
 "Drivers: SPI":
-  status: maintained
-  maintainers:
-    - tbursztyka
+  status: odd fixes
   collaborators:
     - teburd
+    - maass-hamburg
   files:
     - drivers/spi/
     - include/zephyr/drivers/spi.h
@@ -3058,6 +3088,7 @@ Documentation Infrastructure:
     - tgorochowik
   collaborators:
     - kgugala
+    - hongquan-prog
   files:
     - drivers/virtio/
     - dts/bindings/virtio/
@@ -3579,7 +3610,6 @@ Infineon AURIX Platforms:
     - include/zephyr/drivers/*/*aurix*
     - dts/bindings/*/infineon,asclin*
     - dts/bindings/*/infineon,aurix*
-    - dts/bindings/*/infineon,tc*
     - dts/tricore/
   labels:
     - "platform: Infineon AURIX"
@@ -3754,6 +3784,7 @@ Intel Platforms (Xtensa):
     - ycsin
     - dcpleung
     - nashif
+    - hongquan-prog
   files:
     - drivers/interrupt_controller/
     - dts/bindings/interrupt-controller/
@@ -3997,6 +4028,7 @@ LoRa and LoRaWAN:
     - martinjaeger
     - mniestroj
     - carlocaione
+    - juanjin-dev
   files:
     - drivers/lora/
     - include/zephyr/drivers/lora.h
@@ -4240,6 +4272,7 @@ Microchip RISC-V Platforms:
     - boards/microchip/pic64gx_curiosity_kit/
     - dts/riscv/microchip/
     - soc/microchip/miv/
+    - soc/microchip/polarfire/
     - soc/microchip/pic64/
     - drivers/*/*mchp*mss*
     - dts/bindings/*/microchip,mpfs*
@@ -4774,6 +4807,7 @@ Networking:
     - jukkar
   collaborators:
     - pdgendt
+    - maass-hamburg
   files:
     - .github/workflows/net-perf*
     - scripts/net/
@@ -4836,6 +4870,7 @@ Networking:
     - tests/net/wifi/
     - tests/net/arp/
     - tests/net/bridge/
+    - tests/net/bridge_stp/
     - tests/net/ethernet_mgmt/
     - tests/net/vlan/
   labels:
@@ -4965,6 +5000,7 @@ Networking:
     - samples/net/ethernet/
     - tests/net/arp/
     - tests/net/bridge/
+    - tests/net/bridge_stp/
     - tests/net/ethernet_mgmt/
     - tests/net/vlan/
     - doc/services/connectivity/networking/api/ethernet*.rst
@@ -5082,6 +5118,7 @@ Networking:
   files:
     - doc/services/connectivity/networking/api/ieee802154.rst
     - include/zephyr/net/ieee802154*.h
+    - samples/net/ieee802154/
     - subsys/net/l2/ieee802154/
     - subsys/net/lib/config/ieee802154*
     - tests/net/ieee802154/
@@ -5205,6 +5242,7 @@ Nuvoton NPCX Platforms:
   collaborators:
     - TomChang19
     - alvsun
+    - amaoz123
     - keith-zephyr
     - fabiobaltieri
   files:
@@ -5262,6 +5300,7 @@ OTP:
     - drivers/otp/
     - dts/bindings/otp/
     - include/zephyr/drivers/otp.h
+    - tests/drivers/otp/
     - tests/subsys/nvmem/api/otp.overlay
   labels:
     - "area: OTP"
@@ -5301,6 +5340,21 @@ Open AMP:
     - sample.ipc.openamp_rs_table
     - sample.ipc
 
+OpenHW Erbium Platform:
+  status: maintained
+  maintainers:
+    - AFOliveira
+  files:
+    - boards/openhwgroup/erbium/
+    - drivers/serial/Kconfig.shakti_nekko
+    - drivers/serial/uart_shakti_nekko.c
+    - dts/bindings/memory-controllers/openhwgroup,erbium-mram-controller.yaml
+    - dts/bindings/serial/openhwgroup,shakti-uart-v1.yaml
+    - dts/riscv/openhwgroup/erbium.dtsi
+    - soc/openhwgroup/erbium/
+  labels:
+    - "platform: OpenHW"
+
 OpenRISC Arch:
   status: maintained
   maintainers:
@@ -5334,7 +5388,6 @@ PHYTEC Platforms:
   maintainers:
     - dnltz
   collaborators:
-    - jonas-rem
     - pefech
   files:
     - boards/phytec/
@@ -5468,6 +5521,17 @@ QNX Hypervisor Platforms:
   labels:
     - "platform: Quicklogic"
 
+RAKwireless Platforms:
+  status: maintained
+  maintainers:
+    - juanjin-dev
+  files:
+    - boards/rakwireless/
+    - boards/shields/rakwireless_*/
+    - dts/vendor/rakwireless/
+  labels:
+    - "platform: RAKwireless"
+
 RISCV Platforms:
   status: maintained
   maintainers:
@@ -5569,6 +5633,17 @@ RX arch:
     - arch.rx
     - arch
     - kernel
+
+Radxa ROCK 5B Platforms:
+  status: maintained
+  maintainers:
+    - zevorn
+  files:
+    - boards/radxa/rock_5b/
+    - boards/radxa/rock_5b_plus/
+    - boards/radxa/common/rk3588_rock_5b_common.dtsi
+  labels:
+    - "platform: Rockchip"
 
 Random:
   status: maintained
@@ -5693,11 +5768,10 @@ Release:
   status: maintained
   meta: true
   maintainers:
-    - henrikbrixandersen
-    - teburd
+    - nashif
+    - iuliana-prodan
   collaborators:
     - kartben
-    - nashif
   files:
     - VERSION
     - SDK_VERSION
@@ -5715,6 +5789,7 @@ Renesas R-Car Platforms:
     - lorc
   collaborators:
     - xakep-amatop
+    - jpanisbl
   files:
     - boards/renesas/rcar_*/
     - drivers/*/*rcar*
@@ -5736,11 +5811,11 @@ Renesas RA Platforms:
   maintainers:
     - soburi
     - KhiemNguyenT
+    - khoa-nguyen-18
   collaborators:
     - duynguyenxa
     - thaoluonguw
     - thenguyenyf
-    - khoa-nguyen-18
   files:
     - boards/arduino/uno_r4/
     - boards/renesas/*ra*/
@@ -5833,6 +5908,7 @@ Retention:
     - include/zephyr/retention/
     - subsys/retention/
     - doc/services/storage/retention/
+    - tests/subsys/retention/
   labels:
     - "area: Retention"
 
@@ -5849,6 +5925,20 @@ Rockchip Platforms:
     - include/zephyr/dt-bindings/*/*rk35*
   labels:
     - "platform: Rockchip"
+
+Rust:
+  status: maintained
+  maintainers:
+    - d3zd3z
+  collaborators:
+    - felipebalbi
+    - kurtjd
+    - jerrysxie
+  files:
+    - doc/develop/languages/rust/
+    - modules/Kconfig.rust
+  labels:
+    - "area: Rust"
 
 SPARC arch:
   status: odd fixes
@@ -6431,10 +6521,14 @@ TI SimpleLink Platforms:
     - "platform: TI SimpleLink"
 
 TI Stellaris Platforms:
-  status: odd fixes
+  status: maintained
+  maintainers:
+    - glneo
   files:
     - soc/ti/lm3s6965/
     - dts/arm/ti/lm3s6965.dtsi
+    - dts/bindings/*/*stellaris*
+    - drivers/*/*stellaris*
   labels:
     - "platform: TI Stellaris"
 
@@ -6445,6 +6539,7 @@ TI Tiva C Platforms:
   files:
     - soc/ti/tiva_c/
     - boards/ti/tm4c123gxl/
+    - boards/ti/tm4c129exl/
     - dts/arm/ti/tm4c*
     - dts/bindings/*/*tiva-c*
     - drivers/*/*tiva_c*
@@ -6647,6 +6742,7 @@ TriCore arch:
     - arch/tricore/
     - cmake/compiler/*/target_tricore.cmake
     - cmake/toolchain/tricore/
+    - doc/hardware/arch/tricore.rst
     - include/zephyr/arch/tricore/
   labels:
     - "area: TriCore"
@@ -6801,6 +6897,7 @@ Utilities:
   files:
     - include/zephyr/data/cobs.h
     - lib/utils/
+    - tests/lib/bitmap/
     - tests/unit/timeutil/
     - tests/unit/time_units/
     - tests/unit/rbtree/
@@ -6882,6 +6979,15 @@ WCH Platforms:
     - dts/bindings/*/wch,*
   labels:
     - "platform: WinChipHead"
+
+Waveshare Platforms:
+  status: maintained
+  maintainers:
+    - hongquan-prog
+  files:
+    - boards/waveshare/
+  labels:
+    - "platform: Waveshare"
 
 West:
   status: maintained
@@ -7055,6 +7161,8 @@ West:
     - modules/dhara/
   labels:
     - "area: Disk Access"
+  tests:
+    - drivers.disk.ftl
 
 "West project: edtt":
   status: maintained
@@ -7338,6 +7446,7 @@ West:
     - thaoluonguw
     - binhnguyen2434
     - nhutnguyenkc
+    - khoa-nguyen-18
   files:
     - modules/Kconfig.renesas
   labels:
@@ -7564,6 +7673,7 @@ West:
   collaborators:
     - pdgendt
     - uLipe
+    - AndreCostaaa
   files:
     - modules/lvgl/
     - tests/lib/gui/lvgl/
@@ -7884,18 +7994,6 @@ West:
     - modules/zcbor/
   labels:
     - "area: CBOR"
-
-"West project: zephyr-lang-rust":
-  status: maintained
-  maintainers:
-    - d3zd3z
-  collaborators:
-    - felipebalbi
-    - kurtjd
-    - jerrysxie
-  files: []
-  labels:
-    - "area: Rust"
 
 "West project: zephyr-xenlib":
   status: maintained

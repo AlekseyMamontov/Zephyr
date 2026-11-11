@@ -15,4 +15,6 @@ supported:
   - dac
   - spi
   - vref
+  - trng
+  - watchdog
 vendor: ti

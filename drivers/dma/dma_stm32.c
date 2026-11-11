@@ -298,9 +298,10 @@ int dma_stm32_zcfg_to_halcfg(const struct device *dma, const struct dma_config *
 	}
 
 
-#if defined(CONFIG_DMA_STM32_V1) && !defined(CONFIG_SOC_SERIES_STM32H7X) && \
-	!defined(CONFIG_SOC_SERIES_STM32MP13X)
-	hal_config->Channel = zephyr_config->dma_slot;
+#if defined(CONFIG_SOC_SERIES_STM32F2X) || \
+	defined(CONFIG_SOC_SERIES_STM32F4X) || \
+	defined(CONFIG_SOC_SERIES_STM32F7X)
+	hal_config->Channel = zephyr_config->dma_slot * DMA_CHANNEL_1;
 #elif DT_HAS_COMPAT_STATUS_OKAY(st_stm32_dma_v2bis)
 	/* DMA under "st,stm32-dma-v2bis" compatible do not possess
 	 * DMA_InitTypeDef->Channel or DMA_InitTypeDef->Request.
@@ -900,6 +901,8 @@ static int dma_stm32_reload(const struct device *dev, uint32_t id,
 	/* When reloading the dma, the stream is busy again before enabling */
 	stream->busy = true;
 
+	/* The flags of the last transfer must be cleared before the stream is enabled */
+	dma_stm32_clear_stream_irq(dev, id);
 	stm32_dma_enable_stream(dma, id);
 
 	return 0;

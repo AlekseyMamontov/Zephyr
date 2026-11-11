@@ -342,7 +342,9 @@ class CheckPatch(ComplianceTest):
 
         cmd.extend(['--mailback', '--no-tree', '-'])
         with subprocess.Popen(
-            ('git', 'diff', '--no-ext-diff', COMMIT_RANGE), stdout=subprocess.PIPE, cwd=GIT_TOP
+            ('git', 'diff', '--no-ext-diff', COMMIT_RANGE, '--', ':!*.diff', ':!*.patch'),
+            stdout=subprocess.PIPE,
+            cwd=GIT_TOP,
         ) as diff:
             try:
                 subprocess.run(
@@ -481,6 +483,30 @@ class ClangFormatCheck(ComplianceTest):
                     if patch.is_removed_file:
                         continue
                     self._process_patch_error(file, patch)
+
+
+class FileNameCheck(ComplianceTest):
+    """
+    Check if Kconfig files have wrongly be named overlays
+    """
+
+    name = "FileName"
+    doc = zephyr_doc_detail_builder("/develop/application/index.html#application-configuration")
+
+    def run(self):
+        for file in get_files(filter="d"):
+            file_path = Path(file)
+            if file_path.suffix != '.conf':
+                continue
+
+            if file_path.name.lower().startswith('overlay'):
+                self.fmtd_failure(
+                    "error",
+                    "FileNameDisallowed",
+                    file_path,
+                    0,
+                    desc='Kconfig fragment files are not overlay files',
+                )
 
 
 class StyleCheckMixin:
@@ -789,6 +815,9 @@ class DevicetreeLintingCheck(ComplianceTest):
                 "--outputFormat",
                 "json",
                 "--format",
+                "--enableSortNodesAndProperties",
+                "--sortNodesNodesBy",
+                "address",
                 "--patchFile",
                 temp_patch,
             ]
@@ -1770,6 +1799,7 @@ Missing SoC names or CONFIG_SOC vs soc.yml out of sync:
             ":!/doc/security/vulnerabilities.rst",
             ":!/doc/security/vulnerabilities",
             cwd=GIT_TOP,
+            ignore_non_zero=True,
         )
 
         self_folder = Path(__file__).resolve().parent
@@ -2316,7 +2346,11 @@ def filter_py(root, fnames):
         for fname in fnames
         if (
             fname.endswith(".py")
-            or magic.from_file(os.path.join(root, fname), mime=True) == "text/x-python"
+            or (
+                not Path(fname).suffix
+                and magic.from_file(os.path.join(root, fname), mime=True)
+                in ("text/x-python", "text/x-script.python")
+            )
         )
     ]
 
@@ -2717,13 +2751,20 @@ class Ruff(ComplianceTest):
     def run(self):
         if (ruff := shutil.which("ruff")) is None:
             raise FileNotFoundError("ruff is not installed")
+
+        files = get_files(filter="d")
+        py_files = filter_py(GIT_TOP, files)
+        script_files = filter_py(
+            GIT_TOP,
+            [file for file in git("ls-files").splitlines() if not Path(file).suffix],
+        )
+
         try:
             subprocess.run(
-                f"{ruff} check --output-format=json",
+                [ruff, "check", "--output-format=json", ".", *script_files],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                shell=True,
                 cwd=GIT_TOP,
             )
         except subprocess.CalledProcessError as ex:
@@ -2752,15 +2793,11 @@ class Ruff(ComplianceTest):
                     desc=m.get("message"),
                 )
 
-        for file in get_files(filter="d"):
-            if not file.endswith((".py", ".pyi")):
-                continue
-
+        for file in [*py_files, *(file for file in files if file.endswith(".pyi"))]:
             try:
                 subprocess.run(
-                    f"{ruff} format --force-exclude --diff {file}",
+                    [ruff, "format", "--force-exclude", "--diff", file],
                     check=True,
-                    shell=True,
                     cwd=GIT_TOP,
                 )
             except subprocess.CalledProcessError:
@@ -2780,7 +2817,7 @@ class PythonCompatCheck(ComplianceTest):
     MAX_VERSION_STR = f"{MAX_VERSION[0]}.{MAX_VERSION[1]}"
 
     def run(self):
-        py_files = [f for f in get_files(filter="d") if f.endswith(".py")]
+        py_files = filter_py(GIT_TOP, get_files(filter="d"))
         if not py_files:
             return
         cmd = [
