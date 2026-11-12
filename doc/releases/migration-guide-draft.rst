@@ -102,6 +102,19 @@ Boards
     add them to the ``interrupts-extended`` of ``plic0``, ``mtimer`` and ``plic_sw``, or include
     the :file:`riscv/andes/andes_v5_ae350_<core>mp.dtsi` of their core.
 
+* The RAKwireless ``rak3172`` board is renamed to :zephyr:board:`rak3272s`. It
+  was named after the WisDuo stamp module it carries rather than the board it
+  describes, which is the RAK3272S Breakout Board. The other carrier for the
+  same module is the new :zephyr:board:`rak3372` WisBlock Core Module.
+  :file:`boards/deprecated.cmake` keeps ``-b rak3172`` working with a warning,
+  but out-of-tree code testing ``CONFIG_BOARD_RAK3172`` must switch to
+  ``CONFIG_BOARD_RAK3272S``.
+
+* :zephyr:board:`rak3272s` no longer defines ``led0``. The RAK3272S carries no
+  LEDs and leaves the two module pins the nodes used unrouted. Applications
+  that relied on the alias, such as :zephyr:code-sample:`blinky`, need an
+  overlay pointing at a LED wired to the headers.
+
 Device Drivers and Devicetree
 *****************************
 
@@ -155,6 +168,15 @@ Audio Codec
   When using a :dtcompatible:`fixed-clock` node,
   :kconfig:option:`CONFIG_CLOCK_CONTROL_FIXED_RATE_CLOCK` must be enabled.
 
+Clock control
+=============
+
+* NXP MCXC and K32L2B3 SoCs now use the :dtcompatible:`nxp,mcg-lite` binding and driver
+  for the MCG-Lite clock generator. Out-of-tree devicetrees must update the mcg node to use
+  the new compatible and replace any use of ``KINETIS_MCG_OUT_CLK`` with
+  ``NXP_MCG_LITE_OUT_CLK``. The ``lircdiv2`` property is no longer supported by
+  :dtcompatible:`nxp,kinetis-mcg` and should be removed from existing devicetrees.
+
 Comparator
 ==========
 
@@ -206,6 +228,15 @@ Ethernet
   on every Ethernet interface when :kconfig:option:`CONFIG_NET_LLDP` is set. Out-of-tree Ethernet
   drivers must stop reporting it. (:github:`124787`)
 
+I2S
+===
+
+* :kconfig:option:`CONFIG_I2S_NATIVE_SIM_RX_FILE_PATH` and
+  :kconfig:option:`CONFIG_I2S_NATIVE_SIM_TX_FILE_PATH` are deprecated. Use
+  :kconfig:option:`CONFIG_I2S_NATIVE_SIM_RX_PATH` and
+  :kconfig:option:`CONFIG_I2S_NATIVE_SIM_TX_PATH`, which also accept ALSA devices. Without the
+  ALSA backend the old options still provide their default. (:github:`123474`)
+
 Modem
 =====
 
@@ -236,6 +267,19 @@ OPAMP
   a runtime reference on the reference source while it measures an amplifier fed by it. Builds
   without device runtime PM are unaffected: the device is resumed at init and the instance comes
   up enabled as before. (:github:`122135`)
+
+PCIe
+====
+
+* :c:func:`pcie_msi_map` now returns ``uint64_t`` instead of ``uint32_t``, and the ``address``
+  member of :c:struct:`msi_vector_generic` is now ``uint64_t``. Out-of-tree implementations of
+  :c:func:`pcie_msi_map` and code that reads the MSI vector address must be updated. The ITS
+  getter (:c:func:`its_get_msi_addr`) also returns ``uint64_t``. (:github:`124156`)
+
+* A 32-bit MSI capability whose ITS target address is above 4 GiB now makes
+  :c:func:`pcie_msi_enable` return false without writing the configuration space or enabling bus
+  mastering; dependent drivers such as NVMe, ivshmem and IGC fail to initialize. This is
+  intentional: use a 64-bit MSI capability or a target address below 4 GiB. (:github:`124156`)
 
 PTP Clock
 =========

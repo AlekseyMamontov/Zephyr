@@ -2566,6 +2566,7 @@ Documentation Infrastructure:
   status: odd fixes
   collaborators:
     - ithinuel
+    - TomasGalbickaNXP
   files:
     - include/zephyr/drivers/mbox.h
     - drivers/mbox/
@@ -2831,7 +2832,9 @@ Documentation Infrastructure:
     - drivers.regulator
 
 "Drivers: Reset":
-  status: odd fixes
+  status: maintained
+  maintainers:
+    - andrei-edward-popa
   files:
     - drivers/reset/
     - include/zephyr/drivers/reset.h
@@ -3389,6 +3392,17 @@ Ezurio platforms:
   labels:
     - "platform: Ezurio"
 
+Fastbit Platforms:
+  status: maintained
+  maintainers:
+    - kiran-fastbit
+    - shreyas-fastbit
+  files:
+    - boards/fastbit/
+    - dts/bindings/gpio/fastbit,nano-header.yaml
+  labels:
+    - "platform: Fastbit"
+
 Filesystems:
   status: maintained
   maintainers:
@@ -3557,6 +3571,7 @@ IPC:
     - anangl
   collaborators:
     - arnopo
+    - TomasGalbickaNXP
   files:
     - include/zephyr/ipc/
     - samples/subsys/ipc/
@@ -4731,6 +4746,9 @@ NXP Platforms (MPU):
     - tests/arch/arm64/arm64_gicv3_its/boards/imx*.conf
   files-regex:
     - boards/nxp/.*m?imx[^(rt)].*/
+  files-exclude:
+    - drivers/video/imx*
+    - drivers/video/Kconfig.imx*
   labels:
     - "platform: NXP MPU"
     - "platform: NXP"
